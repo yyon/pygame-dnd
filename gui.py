@@ -23,8 +23,8 @@ import shlex, subprocess
 import os, pygame
 from pygame.locals import * #@UnusedWildImport
 
-if not pygame.font: print 'Warning, fonts disabled'
 if not pygame.mixer: print 'Warning, sound disabled'
+if not pygame.font: print 'Warning, fonts disabled'
 
 MOUSEBUTTONDRAGGED = 50
 MOUSEBUTTONSTOPDRAG = 51
@@ -36,6 +36,9 @@ screensize = [1200, 700]
 __author__ = "Ian Campbell"
 __copyright__ = "GPL v3"
 
+def is_click(event):
+	return (event.type == MOUSEBUTTONDOWN and event.button == 1)
+
 #a simple rectangle with a move function
 class rect(pygame.Rect):
 	def __init__(self, left, top=None, width=None, height=None):
@@ -44,6 +47,7 @@ class rect(pygame.Rect):
 		else:
 			pygame.Rect.__init__(self, left, top, width, height)
 	
+	#move rectangle to a new position
 	def move(self, pos):
 		self.topleft = pos
 
@@ -63,7 +67,7 @@ class clickRect(rect):
 	
 	def click(self, event, position):
 		if self.allow_dragging:
-			if event.type == MOUSEBUTTONDOWN:
+			if is_click(event):
 				self.startdragpos = position
 				self.dragged = True
 			elif self.dragged:
@@ -139,7 +143,7 @@ class picturebox(clickRect, control):
 			clickRect.__init__(self, window, 0, 0, size[0], size[1], 1, self.showicons)
 	
 	def showicons(self, event, position, dragpos=None):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			self.toggleicons()
 	
 	def toggleicons(self):
@@ -158,7 +162,7 @@ class picturebox(clickRect, control):
 			self.sprite = None
 	
 	def gimpedit(self, event, position, dragpos=None):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			if self.gimpsprite.visible and self.refreshsprite.visible:
 				fullname = resources.fullname(self.imagefolder, self.imagename)
 				if not os.path.exists(fullname):
@@ -168,7 +172,7 @@ class picturebox(clickRect, control):
 				self.toggleicons()
 		
 	def refresh(self, event, position, dragpos=None):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			if self.gimpsprite.visible and self.refreshsprite.visible:
 				self.makesprite()
 			else:
@@ -213,7 +217,7 @@ class checkbox(rect, control):
 			self.sprite.visible = False
 	
 	def click(self, event, position, dragposition):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			self.checked = not self.checked
 			self.setvisible()
 
@@ -354,7 +358,7 @@ class entry(clickRect, control):
 		self.rtextpos.move(textpospos)
 		
 	def click(self, event, position):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			self.window.window.tab(self.window.window.gettablist().index(self))
 	
 	def select(self):
@@ -381,26 +385,32 @@ class entry(clickRect, control):
 class windowarea(pygame.Surface):
 	def __init__(self, window, left, top, width, height):
 		pygame.Surface.__init__(self, (screensize[0], screensize[1]))
+
+		self.window = window
 		
 		self.rect = clickRect(window, self.get_rect().left, self.get_rect().top, self.get_rect().width, self.get_rect().height, 1, self.event)
 		self.rect.topleft = [left, top]
 		self.rect.width = width
 		self.rect.height = height
 		
+		if self.window.has_scrollbar == True:
+			self.rect.width -= self.window.scrollbarwidth
+		
 		window.addrect(self.rect, stretch=[True, True], bottomright=None)
 		
-		self.window = window
+		self.scrollpercent = 0.0
+		self.scrolltop = 0
 		
 		self.objects = []
 		self.clickareas = []
 	
 	def draw(self, screen):
-		screenrect = rect(0, 0, self.rect.width, self.rect.height)
+		screenrect = rect(0, self.scrolltop, self.rect.width, self.rect.height)
 		screen.blit(self, [self.rect.left,self.rect.top], area=screenrect)
 		pygame.draw.rect(self, pygame.color.Color(240, 240, 240), screenrect)
 		for obj in self.objects:
 			obj.draw(self)
-
+			
 	#add clickable area to window
 	def addclickarea(self, layer, rect):
 		if len(self.clickareas)-1 < layer:
@@ -410,9 +420,9 @@ class windowarea(pygame.Surface):
 		self.clickareas[layer].append(rect)
 	
 	def event(self, event, position, dragstartpos=None):
-		position = [position[0] - self.rect.left, position[1] - self.rect.top]
+		position = [position[0] - self.rect.left, position[1] - self.rect.top + self.scrolltop]
 		
-		if event.type == MOUSEBUTTONDOWN or event.type == MOUSEBUTTONUP:
+		if is_click(event) or (event.type == MOUSEBUTTONUP and event.button == 1):
 			foundrect = False
 			for layernum in range(len(self.clickareas)-1, -1, -1):
 				layer = self.clickareas[layernum]
@@ -425,12 +435,27 @@ class windowarea(pygame.Surface):
 						break
 				if foundrect:
 					break
+		elif event.type == MOUSEBUTTONDOWN and event.button in [4,5]:
+			if event.button == 4:
+				scrolldist = 10
+				print "scrolling up"
+			else:
+				scrolldist = -10
+				print "scrolling down"
+			
+			if float(self.rect.height - self.window.scrollbar.height) == 0:
+				newscrollpercent = 0.0
+			else:
+				newscrollpercent = (self.window.scrollbar.top - (self.rect.top + scrolldist)) / float(self.rect.height - self.window.scrollbar.height)		
+			self.scrollpercent = newscrollpercent
+						
+			self.window.scroll(newscrollpercent)
 		else:
 			self.window.gettablist()[self.window.tabindex].event(event, position)
 
 class Window(pygame.Rect):
 	#init
-	def __init__(self, title, left, top, width, height, minwidth=100, minheight=100):
+	def __init__(self, title, left, top, width, height, scrollbar=False, minwidth=100, minheight=100):
 		pygame.Rect.__init__(self, left, top, width, height)
 		
 		objlists.windows.append(self)
@@ -448,13 +473,23 @@ class Window(pygame.Rect):
 				
 		self.addrect(self, stretch=[True, True])
 		
-		#main area for contros
 		self.areabuffer = 5
-		self.area = windowarea(self, self.left + self.areabuffer, self.top + self.titlebarheight + self.areabuffer, self.width-self.areabuffer*2, self.height-self.titlebarheight-self.areabuffer*2)
 		
-		#keep track of where to put new contros
+		#keep track of where to put new controls
 		self.packlist = []
 		self.packbuffer = 4
+		
+		#scrollbar stuff
+		self.has_scrollbar = scrollbar
+		self.scrollbarwidth = 10
+		
+		#main area for controls
+		self.area = windowarea(self, self.left + self.areabuffer, self.top + self.titlebarheight + self.areabuffer, self.width-self.areabuffer*2, self.height-self.titlebarheight-self.areabuffer*2)
+
+		#scrollbar
+		self.scrollbar = clickRect(self, self.right-self.areabuffer-self.scrollbarwidth, self.area.rect.top, self.scrollbarwidth, self.area.rect.bottom, 1, self.clickscrollbar, allow_hovering=False)
+		self.addrect(self.scrollbar, stretch=[False, False], addsize=[True, False])		
+		self.resizescrollbar()
 		
 		#window background
 		self.back = pygame.Surface([width, height])
@@ -527,29 +562,30 @@ class Window(pygame.Rect):
 		self.originalsize = [0,0]
 		
 		self.tabindex = -1
-	
+		
+		#rect that contains everything that can be clicked on in a window
+		self.boundarybuffer = self.cornerresizebuffer
+		self.boundaries = rect(self.left - self.boundarybuffer, self.top - self.boundarybuffer, self.width + 2*self.boundarybuffer, self.height + 2*self.boundarybuffer)
+		self.addrect(self.boundaries, stretch=[True, True])
+
+
+			
 	#add control to window
 	def pack(self, rect, direction="down"):
 		if direction == "down":
-			packnexty = 0
-			for layer in self.packlist:
-				layerheights = [obj.height for obj in layer]
-				layerheight = max(layerheights)
-				packnexty += layerheight
-				packnexty += self.packbuffer
+			packnexty = self.getareaheight()
+			packnexty += self.packbuffer
 			self.packlist.append([])
 			self.packlist[len(self.packlist)-1].append(rect)
 			rect.move([0, packnexty])
 		elif direction == "right":
 			layer = self.packlist[len(self.packlist)-1]
 			packnextx = 0
-			packnexty = 0
-			
-			for layer in self.packlist[:-1]:
-				layerheights = [rect.height for rect in layer]
-				layerheight = max(layerheights)
-				packnexty += layerheight
-				packnexty += self.packbuffer
+
+			if len(self.packlist) == 0:
+				packnexty = 0
+			else:
+				packnexty = self.packlist[-1][0].top
 
 			for obj in layer:
 				packnextx += obj.width
@@ -558,7 +594,62 @@ class Window(pygame.Rect):
 			self.packlist[len(self.packlist)-1].append(rect)
 			rect.move([packnextx, packnexty])
 		self.area.objects.append(rect)
+		self.resizescrollbar()
+		
+	def getareaheight(self):
+		#get distance to last column
+		if len(self.packlist) == 0:
+			height = 0
+		else:
+			height = self.packlist[-1][0].top
+			#add height of last column
+			columnheights = [obj.height for obj in self.packlist[-1]]
+			columnheight = max(columnheights)
+			height += columnheight
+		
+		return height
 	
+	#window has changed, update scrollbar
+	def resizescrollbar(self):
+		controlsheight = self.getareaheight()
+		areaheight = self.area.rect.height
+		if controlsheight < areaheight:
+			scrollsizepercent = 1.0
+		else:
+			scrollsizepercent = float(areaheight) / float(controlsheight)
+		self.scrollbar.height = scrollsizepercent * float(areaheight)
+		self.scrollbar.top = (self.scrollbar.height - areaheight) * self.area.scrollpercent + self.area.rect.top
+		self.calculatescrolltop()
+	
+	def clickscrollbar(self, event, position, drag_position):
+		if is_click(event):
+			self.scrollbardifference = (drag_position[1]-self.scrollbar.top)
+		elif event.type == MOUSEBUTTONDRAGGED:
+			#find new scroll bar top
+			newscrollbartop = position[1] - self.scrollbardifference
+			#find scroll bar percent
+			if (self.scrollbar.height - self.area.rect.height) == 0:
+				newscrollpercent = 1.0
+			else:
+				newscrollpercent = (newscrollbartop - self.area.rect.top) / float(self.area.rect.height - self.scrollbar.height)
+			self.scroll(newscrollpercent)
+	
+	def scroll(self, newscrollpercent):
+		#recalculate with mins and maxes
+		if newscrollpercent > 1.0:
+			newscrollpercent = 1.0
+		elif newscrollpercent < 0.0:
+			newscrollpercent = 0.0
+		self.area.scrollpercent = newscrollpercent
+		self.calculatescrolltop()
+		
+	def calculatescrolltop(self):
+		self.area.scrolltop = self.area.scrollpercent * (self.getareaheight() - self.area.rect.height)
+		if self.area.scrolltop == 0:
+			self.area.scrollpercent = 0.0
+		self.scrollbar.top = float(self.area.rect.height - self.scrollbar.height) * self.area.scrollpercent + self.area.rect.top	
+	
+	#get lists of controls that can be selected
 	def gettablist(self):
 		tablist = []
 		for row in self.packlist:
@@ -614,16 +705,16 @@ class Window(pygame.Rect):
 	
 	#called whenever titlebar is clicked
 	def titlebarclicked(self, event, position, dragpos):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			self.originalpos = [self.left, self.top]
-		if event.type == MOUSEBUTTONDRAGGED or event.type == MOUSEBUTTONDOWN:
+		if event.type == MOUSEBUTTONDRAGGED or is_click(event):
 			movevector = [position[0]-dragpos[0], position[1]-dragpos[1]]
 			newpos = [self.originalpos[0] + movevector[0], self.originalpos[1] + movevector[1]]
 			self.move(newpos)
 	
 	#corner is clicked for resizing
 	def resizecornerclicked(self, event, position, dragpos, side=None):
-		if event.type == MOUSEBUTTONDRAGGED or event.type == MOUSEBUTTONDOWN:
+		if event.type == MOUSEBUTTONDRAGGED or is_click(event):
 			resizeclickedfunction = functools.partial(self.resizeclicked, event, position, dragpos)
 			
 			if side == "topleft":
@@ -645,14 +736,14 @@ class Window(pygame.Rect):
 
 	#side is clicked for resizing
 	def resizeclicked(self, event, position, dragpos, side=None):
-		if event.type == MOUSEBUTTONDOWN:
+		if is_click(event):
 			if side == "left" or side == "right":
 				self.originalpos[0] = self.left
 				self.originalsize[0] = self.width
 			elif side == "top" or side == "bottom":
 				self.originalpos[1] = self.top
 				self.originalsize[1] = self.height
-		if event.type == MOUSEBUTTONDRAGGED or event.type == MOUSEBUTTONDOWN:
+		if event.type == MOUSEBUTTONDRAGGED or is_click(event):
 			if side == "left" or side == "right":
 				pos = position[0]
 				dpos = dragpos[0]
@@ -690,6 +781,8 @@ class Window(pygame.Rect):
 					if rectangle.stretch[1] == True:
 						rectangle.height = originalsize[1] + vector + rectangle.startbottomright[1] - rectangle.starttopleft[1]
 					rectangle.top = originalpos[1] + rectangle.starttopleft[1] + addtopleft[1]
+		if side == "top" or side == "bottom":
+			self.resizescrollbar()
 	
 	#add width or height to control topleft if needed
 	def calcaddtopleft(self, rectangle):
@@ -717,7 +810,7 @@ class Window(pygame.Rect):
 	
 	#get mouse event
 	def event(self, event, position):
-		if event.type == MOUSEBUTTONDOWN or event.type == MOUSEBUTTONUP:
+		if is_click(event) or (event.type == MOUSEBUTTONUP and event.button == 1):
 			foundrect = False
 			for layernum in range(len(self.clickareas)-1, -1, -1):
 				layer = self.clickareas[layernum]
@@ -757,6 +850,7 @@ class Window(pygame.Rect):
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("white"), self)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self, 3)
+		pygame.draw.rect(screen, pygame.color.Color("black"), self.scrollbar, 1)
 		pygame.draw.rect(screen, pygame.color.Color("cyan"), self.titlebar)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self.titlebar, 3)
 		screen.blit(self.text, self.textpos)
@@ -789,7 +883,7 @@ class mainwindow(Window):
 #test window
 class testwindow(Window):
 	def __init__(self):
-		Window.__init__(self, "Test Window", 400, 100, 200, 400)
+		Window.__init__(self, "Test Window", 400, 100, 200, 400, scrollbar=True)
 		
 		self.testlabel = label("Hello World:")
 		self.pack(self.testlabel)
@@ -800,14 +894,23 @@ class testwindow(Window):
 		self.nexttest = button(self.area, "Hello world 4!", self.testbuttonclick)
 		self.pack(self.nexttest)
 		
+		self.entrylabel = label("enter:")
+		self.pack(self.entrylabel)
+
 		self.nexttest = entry(self.area, 100)
-		self.pack(self.nexttest)
+		self.pack(self.nexttest, "right")
 
 		self.check = checkbox(self.area, "hello world")
 		self.pack(self.check)
 		
 		self.pict = picturebox(self.area, "test", "euohtasn.png")
 		self.pack(self.pict)
+		
+		self.pack(label("hi"))
+		self.pack(label("hi"))
+		self.pack(label("hi"))
+		self.pack(label("hi"))
+		self.pack(label("hi"))
 	
 	def testbuttonclick(self, event, position, dragpos):
 		if event.type == MOUSEBUTTONUP:
@@ -855,9 +958,9 @@ def main():
 				#find window, send event to window
 				for windowindex in range(0, len(objlists.windows)):
 					window = objlists.windows[windowindex]
-					if window.collidepoint(position):
+					if window.boundaries.collidepoint(position):
 						window.event(event, position)
-						if event.type in [MOUSEBUTTONDOWN, MOUSEBUTTONUP]:
+						if event.type in [MOUSEBUTTONDOWN, MOUSEBUTTONUP] and event.button == 1:
 							#focus window
 							if len(objlists.windows) != 0:
 								objlists.windows.insert(0, objlists.windows.pop(windowindex))
