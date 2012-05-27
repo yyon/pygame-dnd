@@ -18,11 +18,10 @@
 
 import resources
 import functools
-import numpy
 import shlex, subprocess
 
 import os, pygame
-from pygame.locals import *
+from pygame.locals import * #@UnusedWildImport
 
 if not pygame.font: print 'Warning, fonts disabled'
 if not pygame.mixer: print 'Warning, sound disabled'
@@ -405,7 +404,7 @@ class windowarea(pygame.Surface):
 	#add clickable area to window
 	def addclickarea(self, layer, rect):
 		if len(self.clickareas)-1 < layer:
-			for i in range(len(self.clickareas), layer+1):
+			for i in range(len(self.clickareas), layer+1): #@UnusedVariable
 				self.clickareas.append([])
 		
 		self.clickareas[layer].append(rect)
@@ -530,8 +529,8 @@ class Window(pygame.Rect):
 		self.tabindex = -1
 	
 	#add control to window
-	def pack(self, rect, dir="down"):
-		if dir == "down":
+	def pack(self, rect, direction="down"):
+		if direction == "down":
 			packnexty = 0
 			for layer in self.packlist:
 				layerheights = [obj.height for obj in layer]
@@ -541,7 +540,7 @@ class Window(pygame.Rect):
 			self.packlist.append([])
 			self.packlist[len(self.packlist)-1].append(rect)
 			rect.move([0, packnexty])
-		elif dir == "right":
+		elif direction == "right":
 			layer = self.packlist[len(self.packlist)-1]
 			packnextx = 0
 			packnexty = 0
@@ -711,7 +710,7 @@ class Window(pygame.Rect):
 	#add clickable area to window
 	def addclickarea(self, layer, rect):
 		if len(self.clickareas)-1 < layer:
-			for i in range(len(self.clickareas), layer+1):
+			for i in range(len(self.clickareas), layer+1): #@UnusedVariable
 				self.clickareas.append([])
 		
 		self.clickareas[layer].append(rect)
@@ -831,7 +830,7 @@ def main():
 	objlists.windows = []
 	objlists.clickareas = []
 	clock = pygame.time.Clock()
-    
+	
 	#Display The Background
 	screen.blit(background, (0, 0))
 	pygame.display.flip()
