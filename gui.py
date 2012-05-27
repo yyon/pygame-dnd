@@ -35,7 +35,7 @@ screensize = [1200, 700]
 
 __author__ = "Ian Campbell"
 __copyright__ = "GPL v3"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 #a simple rectangle with a move function
 class rect(pygame.Rect):
@@ -88,9 +88,13 @@ class clickSprite(pygame.sprite.Sprite):
 	def __init__(self, window, imagefolder, imagename, clickmethod, clicklayer=1, allow_dragging = True, allow_hovering = True):
 		pygame.sprite.Sprite.__init__(self)
 		self.image, self.rect = resources.load_image(imagefolder, imagename)
+		self.visible = True
 		self.rect = clickRect(window, self.rect.left, self.rect.top, self.rect.width, self.rect.height, layer=clicklayer, clicked=clickmethod, allow_dragging=allow_dragging, allow_hovering=allow_hovering)
 	def draw(self, screen):
-		screen.blit(self.image, self.rect)
+		if self.visible:
+			screen.blit(self.image, self.rect)
+	def move(self, pos):
+		self.rect.topleft = pos
 
 class control():
 	def __init__(self):
@@ -99,6 +103,48 @@ class control():
 		pass
 	def deselect(self):
 		pass
+	def event(self, event, position):
+		pass
+
+#a checkbox control
+class checkbox(rect, control):
+	def __init__(self, window, text, font=None):
+		control.__init__(self)
+		self.sprite = clickSprite(window, "gui", "check.png", self.click, allow_dragging=False, allow_hovering=False)
+
+		self.buffer = 5
+
+		if font == None:
+			font = pygame.font.Font(None, 14)
+		self.text = font.render(text, 1, (0,0,0))
+		self.textpos = rect(self.text.get_rect())
+
+		rect.__init__(self, 0, 0, self.sprite.rect.width + self.textpos.width, self.sprite.rect.height)
+		self.checked = False
+		self.setvisible()
+	
+	def setvisible(self):
+		if self.checked:
+			self.sprite.visible = True
+		else:
+			self.sprite.visible = False
+	
+	def click(self, event, position, dragposition):
+		if event.type == MOUSEBUTTONDOWN:
+			self.checked = not self.checked
+			self.setvisible()
+
+	def draw(self, screen):
+		self.sprite.draw(screen)
+		pygame.draw.rect(screen, pygame.color.Color("black"), self.sprite.rect, 1)
+		screen.blit(self.text, self.textpos)
+	
+	def move(self, pos):
+		rect.move(self, pos)
+		self.textpos.move(pos)
+		self.textpos.left += self.sprite.rect.width + self.buffer
+		self.sprite.move(pos)
+		
 
 #a label control
 class label(rect, control):
@@ -172,11 +218,15 @@ class entry(clickRect, control):
 	def __init__(self, window, width, clicklayer=1, font=None):
 		control.__init__(self)
 		
+		self.textpospos = [0,0]
+		
 		self.window = window
 		
 		self.outlinewidth = 2
 		
 		self.rectangles = []
+		
+		self.controlwidth = width
 
 		self.textbuffer = 3
 		
@@ -184,27 +234,41 @@ class entry(clickRect, control):
 		
 		self.outlinecolor = pygame.color.Color("black")
 		
-		if font == None:
-			font = pygame.font.Font(None, 14)
-		self.text = font.render("", 1, (0,0,0))
-		self.textpos = rect(self.text.get_rect())
-		self.textpos.width = width
-		self.rectangles.append(self.textpos)
+		self.text = ""
 		
-		self.height = self.textpos.height + self.textbuffer*2
-		self.width = self.textpos.width + self.textbuffer*2
+		self.font = font
+		if self.font == None:
+			self.font = pygame.font.Font(None, 14)
+		
+		self.rendertext()
 
 		clickmethod = self.click
 		clickRect.__init__(self, window, 0, 0, self.width, self.height, clicklayer, clickmethod, None, None)
 		
-		self.textpos.topleft = [0,0]
+		self.rtextpos.topleft = [0,0]
 		
 		self.topleft = [0,0]
 	
+	def rendertext(self):
+		try:
+			self.rectangles.remove(self.rtextpos)
+		except:
+			pass
+		self.rtext = self.font.render(self.text, 1, (0,0,0))
+		self.rtextpos = rect(self.rtext.get_rect())
+		self.rtextpos.width = self.controlwidth
+		self.rtextpos.move(self.textpospos)
+		self.rectangles.append(self.rtextpos)
+		
+		self.height = self.rtextpos.height + self.textbuffer*2
+		self.width = self.rtextpos.width + self.textbuffer*2
+	
 	def move(self, pos):
+		self.pos = pos
 		clickRect.move(self, pos)
 		textpospos = [pos[0] + self.textbuffer, pos[1] + self.textbuffer]
-		self.textpos.move(textpospos)
+		self.textpospos = textpospos
+		self.rtextpos.move(textpospos)
 		
 	def click(self, event, position):
 		if event.type == MOUSEBUTTONDOWN:
@@ -219,7 +283,16 @@ class entry(clickRect, control):
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("light grey"), self)
 		pygame.draw.rect(screen, self.outlinecolor, self, self.outlinewidth)
-		screen.blit(self.text, self.textpos)
+		screen.blit(self.rtext, self.rtextpos)
+
+	def event(self, event, position):
+		if event.type == KEYDOWN:
+			if event.key == K_BACKSPACE:
+				if len(self.text) >= 1:
+					self.text = self.text[:-1]
+			else:
+				self.text += event.unicode
+		self.rendertext()
 
 #main area for window
 class windowarea(pygame.Surface):
@@ -270,7 +343,7 @@ class windowarea(pygame.Surface):
 				if foundrect:
 					break
 		else:
-			pass
+			self.window.gettablist()[self.window.tabindex].event(event, position)
 
 class Window(pygame.Rect):
 	#init
@@ -600,7 +673,6 @@ class Window(pygame.Rect):
 	#draw everything
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("white"), self)
-#		pygame.draw.rect(screen, pygame.color.Color("grey"), self.area)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self, 3)
 		pygame.draw.rect(screen, pygame.color.Color("cyan"), self.titlebar)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self.titlebar, 3)
@@ -647,6 +719,9 @@ class testwindow(Window):
 		
 		self.nexttest = entry(self.area, 100)
 		self.pack(self.nexttest)
+
+		self.check = checkbox(self.area, "hello world")
+		self.pack(self.check)
 	
 	def testbuttonclick(self, event, position, dragpos):
 		if event.type == MOUSEBUTTONUP:
@@ -676,6 +751,8 @@ def main():
 	
 	mainwindow()
 	testwindow()
+	
+	pygame.key.set_repeat(500, 50)
 	
 	#Main Loop
 	while True:
