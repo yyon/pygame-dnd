@@ -19,6 +19,7 @@
 import resources
 import functools
 import numpy
+import shlex, subprocess
 
 import os, pygame
 from pygame.locals import *
@@ -35,7 +36,6 @@ screensize = [1200, 700]
 
 __author__ = "Ian Campbell"
 __copyright__ = "GPL v3"
-__version__ = "0.0.2"
 
 #a simple rectangle with a move function
 class rect(pygame.Rect):
@@ -83,19 +83,30 @@ class clickRect(rect):
 	def hover(self, position):
 		pass
 
-#a sprite that can be clicked on
-class clickSprite(pygame.sprite.Sprite):
-	def __init__(self, window, imagefolder, imagename, clickmethod, clicklayer=1, allow_dragging = True, allow_hovering = True):
+#a simple sprite
+class sprite(pygame.sprite.Sprite):
+	def __init__(self, window, imagefolder, imagename, size=None):
 		pygame.sprite.Sprite.__init__(self)
 		self.image, self.rect = resources.load_image(imagefolder, imagename)
+		if size != None:
+			self.image = pygame.transform.scale(self.image, (int(size[0]), int(size[1])))
+			self.rect.width = int(size[0])
+			self.rect.height = int(size[1])
 		self.visible = True
-		self.rect = clickRect(window, self.rect.left, self.rect.top, self.rect.width, self.rect.height, layer=clicklayer, clicked=clickmethod, allow_dragging=allow_dragging, allow_hovering=allow_hovering)
 	def draw(self, screen):
 		if self.visible:
-			screen.blit(self.image, self.rect)
+			if self.image != None:
+				screen.blit(self.image, self.rect)
 	def move(self, pos):
 		self.rect.topleft = pos
 
+#a sprite that can be clicked on
+class clickSprite(sprite):
+	def __init__(self, window, imagefolder, imagename, clickmethod, size=None, clicklayer=1, allow_dragging = True, allow_hovering = True):
+		sprite.__init__(self, window, imagefolder, imagename, size)
+		self.rect = clickRect(window, self.rect.left, self.rect.top, self.rect.width, self.rect.height, layer=clicklayer, clicked=clickmethod, allow_dragging=allow_dragging, allow_hovering=allow_hovering)
+
+#control
 class control():
 	def __init__(self):
 		self.tabbable = False
@@ -105,6 +116,79 @@ class control():
 		pass
 	def event(self, event, position):
 		pass
+
+#a picturebox control
+class picturebox(clickRect, control):
+	def __init__(self, window, imagefolder, imagename, size=[50, 50]):
+		control.__init__(self)
+
+		self.window = window
+		self.imagefolder = imagefolder
+		self.imagename = imagename
+		
+		self.iconsize = size[0] / 2.0
+		self.size = size
+
+		self.gimpsprite = clickSprite(self.window, "gui", "gimp.png", self.gimpedit, size=[self.iconsize, self.iconsize], allow_dragging=False, allow_hovering=False, clicklayer=2)
+		self.refreshsprite = clickSprite(self.window, "gui", "refresh.png", self.refresh, size=[self.iconsize, self.iconsize], allow_dragging=False, allow_hovering=False, clicklayer=2)
+
+		self.makesprite()
+		
+		if self.sprite:
+			clickRect.__init__(self, window, 0, 0, self.sprite.rect.width, self.sprite.rect.height, 1, self.showicons)
+		else:
+			clickRect.__init__(self, window, 0, 0, size[0], size[1], 1, self.showicons)
+	
+	def showicons(self, event, position, dragpos=None):
+		if event.type == MOUSEBUTTONDOWN:
+			self.toggleicons()
+	
+	def toggleicons(self):
+		self.gimpsprite.visible = not self.gimpsprite.visible
+		self.refreshsprite.visible = not self.refreshsprite.visible
+	
+	def makesprite(self):
+		fullname = resources.fullname(self.imagefolder, self.imagename)
+		if os.path.exists(fullname):
+			self.sprite = sprite(self.window, self.imagefolder, self.imagename)
+			self.sprite.move(self.topleft)
+			self.width = self.sprite.rect.width
+			self.height = self.sprite.rect.height
+			self.toggleicons()
+		else:
+			self.sprite = None
+	
+	def gimpedit(self, event, position, dragpos=None):
+		if event.type == MOUSEBUTTONDOWN:
+			if self.gimpsprite.visible and self.refreshsprite.visible:
+				fullname = resources.fullname(self.imagefolder, self.imagename)
+				if not os.path.exists(fullname):
+					os.system("convert -size " + str(self.size[0]) + "x" + str(self.size[1]) + " xc:transparent " + str(fullname))
+				subprocess.Popen(shlex.split("gimp "+str(fullname)))
+			else:
+				self.toggleicons()
+		
+	def refresh(self, event, position, dragpos=None):
+		if event.type == MOUSEBUTTONDOWN:
+			if self.gimpsprite.visible and self.refreshsprite.visible:
+				self.makesprite()
+			else:
+				self.toggleicons()
+		
+	
+	def draw(self, screen):
+		pygame.draw.rect(screen, pygame.color.Color("black"), self, 1)
+		if self.sprite:
+			self.sprite.draw(screen)
+		self.gimpsprite.draw(screen)
+		self.refreshsprite.draw(screen)
+	
+	def move(self, pos):
+		rect.move(self, pos)
+		self.gimpsprite.move(pos)
+		self.refreshsprite.move([pos[0]+self.iconsize, pos[1]])
+		if self.sprite:
+			self.sprite.move(pos)
 
 #a checkbox control
 class checkbox(rect, control):
@@ -326,7 +410,7 @@ class windowarea(pygame.Surface):
 		
 		self.clickareas[layer].append(rect)
 	
-	def event(self, event, position, dragstartpos):
+	def event(self, event, position, dragstartpos=None):
 		position = [position[0] - self.rect.left, position[1] - self.rect.top]
 		
 		if event.type == MOUSEBUTTONDOWN or event.type == MOUSEBUTTONUP:
@@ -722,6 +806,9 @@ class testwindow(Window):
 
 		self.check = checkbox(self.area, "hello world")
 		self.pack(self.check)
+		
+		self.pict = picturebox(self.area, "test", "euohtasn.png")
+		self.pack(self.pict)
 	
 	def testbuttonclick(self, event, position, dragpos):
 		if event.type == MOUSEBUTTONUP:
