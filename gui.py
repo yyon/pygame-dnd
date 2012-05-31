@@ -19,6 +19,7 @@
 import resources
 import functools
 import shlex, subprocess
+import objlists
 
 import os, pygame
 from pygame.locals import * #@UnusedWildImport
@@ -67,7 +68,7 @@ class clickRect(rect):
 	
 	def click(self, event, position):
 		if self.allow_dragging:
-			if is_click(event):
+			if event.type == MOUSEBUTTONDOWN:
 				self.startdragpos = position
 				self.dragged = True
 			elif self.dragged:
@@ -90,16 +91,24 @@ class clickRect(rect):
 class sprite(pygame.sprite.Sprite):
 	def __init__(self, window, imagefolder, imagename, size=None):
 		pygame.sprite.Sprite.__init__(self)
-		self.image, self.rect = resources.load_image(imagefolder, imagename)
-		if size != None:
-			self.image = pygame.transform.scale(self.image, (int(size[0]), int(size[1])))
-			self.rect.width = int(size[0])
-			self.rect.height = int(size[1])
+		self.imagename = imagename
+		self.imagefolder = imagefolder
+		self.size = size
 		self.visible = True
+		self.refresh()
+
+	def refresh(self):
+		self.image, self.rect = resources.load_image(self.imagefolder, self.imagename)
+		if self.size != None:
+			self.image = pygame.transform.scale(self.image, (int(self.size[0]), int(self.size[1])))
+			self.rect.width = int(self.size[0])
+			self.rect.height = int(self.size[1])
+
 	def draw(self, screen):
 		if self.visible:
 			if self.image != None:
 				screen.blit(self.image, self.rect)
+
 	def move(self, pos):
 		self.rect.topleft = pos
 
@@ -113,6 +122,7 @@ class clickSprite(sprite):
 class control():
 	def __init__(self):
 		self.tabbable = False
+		self.editable = True
 	def select(self):
 		pass
 	def deselect(self):
@@ -138,12 +148,16 @@ class picturebox(clickRect, control):
 		self.makesprite()
 		
 		if self.sprite:
-			clickRect.__init__(self, window, 0, 0, self.sprite.rect.width, self.sprite.rect.height, 1, self.showicons)
+			clickRect.__init__(self, window, 0, 0, self.sprite.rect.width, self.sprite.rect.height, 1, self.click)
 		else:
-			clickRect.__init__(self, window, 0, 0, size[0], size[1], 1, self.showicons)
+			clickRect.__init__(self, window, 0, 0, size[0], size[1], 1, self.click)
 	
-	def showicons(self, event, position, dragpos=None):
+	def click(self, event, position, dragpos=None):
 		if is_click(event):
+			self.do_click()
+				
+	def do_click(self):
+		if self.editable:
 			self.toggleicons()
 	
 	def toggleicons(self):
@@ -153,7 +167,7 @@ class picturebox(clickRect, control):
 	def makesprite(self):
 		fullname = resources.fullname(self.imagefolder, self.imagename)
 		if os.path.exists(fullname):
-			self.sprite = sprite(self.window, self.imagefolder, self.imagename)
+			self.sprite = sprite(self.window, self.imagefolder, self.imagename, size=self.size)
 			self.sprite.move(self.topleft)
 			self.width = self.sprite.rect.width
 			self.height = self.sprite.rect.height
@@ -164,20 +178,20 @@ class picturebox(clickRect, control):
 	def gimpedit(self, event, position, dragpos=None):
 		if is_click(event):
 			if self.gimpsprite.visible and self.refreshsprite.visible:
-				fullname = resources.fullname(self.imagefolder, self.imagename)
-				if not os.path.exists(fullname):
-					os.system("convert -size " + str(self.size[0]) + "x" + str(self.size[1]) + " xc:transparent " + str(fullname))
-				subprocess.Popen(shlex.split("gimp "+str(fullname)))
+				if self.editable:
+					fullname = resources.fullname(self.imagefolder, self.imagename)
+					if not os.path.exists(fullname):
+						os.system("convert -define png:color-type=6 -size " + str(self.size[0]) + "x" + str(self.size[1]) + " xc:transparent " + str(fullname))
+					subprocess.Popen(shlex.split("gimp \""+str(fullname)+"\""))
 			else:
-				self.toggleicons()
+				self.do_click()
 		
 	def refresh(self, event, position, dragpos=None):
 		if is_click(event):
 			if self.gimpsprite.visible and self.refreshsprite.visible:
 				self.makesprite()
 			else:
-				self.toggleicons()
-		
+				self.do_click()		
 	
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("black"), self, 1)
@@ -193,11 +207,25 @@ class picturebox(clickRect, control):
 		if self.sprite:
 			self.sprite.move(pos)
 
+#a picture that can be clicked on
+class picturebutton(picturebox):
+	def __init__(self, window, imagefolder, imagename, clicked, size=[50, 50]):
+		picturebox.__init__(self, window, imagefolder, imagename, size)
+		self.clicked = clicked
+
+	def do_click(self):
+		if self.sprite != None:
+			self.clicked()
+		else:
+			picturebox.do_click(self)
+
 #a checkbox control
 class checkbox(rect, control):
-	def __init__(self, window, text, font=None):
+	def __init__(self, window, text, font=None, clickmethod=None):
 		control.__init__(self)
 		self.sprite = clickSprite(window, "gui", "check.png", self.click, allow_dragging=False, allow_hovering=False)
+
+		self.clickmethod = clickmethod
 
 		self.buffer = 5
 
@@ -208,21 +236,17 @@ class checkbox(rect, control):
 
 		rect.__init__(self, 0, 0, self.sprite.rect.width + self.textpos.width, self.sprite.rect.height)
 		self.checked = False
-		self.setvisible()
-	
-	def setvisible(self):
-		if self.checked:
-			self.sprite.visible = True
-		else:
-			self.sprite.visible = False
 	
 	def click(self, event, position, dragposition):
 		if is_click(event):
-			self.checked = not self.checked
-			self.setvisible()
+			if self.editable:
+				self.checked = not self.checked
+				if self.clickmethod != None:
+					self.clickmethod()
 
 	def draw(self, screen):
-		self.sprite.draw(screen)
+		if self.checked:
+			self.sprite.draw(screen)
 		pygame.draw.rect(screen, pygame.color.Color("black"), self.sprite.rect, 1)
 		screen.blit(self.text, self.textpos)
 	
@@ -231,7 +255,6 @@ class checkbox(rect, control):
 		self.textpos.move(pos)
 		self.textpos.left += self.sprite.rect.width + self.buffer
 		self.sprite.move(pos)
-		
 
 #a label control
 class label(rect, control):
@@ -239,10 +262,13 @@ class label(rect, control):
 		control.__init__(self)
 		pos=[0,0]
 		
-		if font == None:
-			font = pygame.font.Font(None, 14)
-		self.text = font.render(text, 1, (0,0,0))
-		rect.__init__(self, self.text.get_rect())
+		self.font = font
+		self.text = text
+		
+		if self.font == None:
+			self.font = pygame.font.Font(None, 14)
+		self.label = self.font.render(self.text, 1, (0,0,0))
+		rect.__init__(self, self.label.get_rect())
 		
 		self.move(pos)
 		
@@ -250,7 +276,10 @@ class label(rect, control):
 		rect.move(self, pos)
 	
 	def draw(self, screen):
-		screen.blit(self.text, self)
+		self.label = self.font.render(self.text, 1, (0,0,0))
+		self.height = self.label.get_rect().height
+		self.width = self.label.get_rect().width
+		screen.blit(self.label, self)
 
 #a button control
 class button(clickRect, control):
@@ -278,11 +307,16 @@ class button(clickRect, control):
 		self.height = self.textpos.height + self.textbuffer*2
 		self.width = self.textpos.width + self.textbuffer*2
 		
-		clickRect.__init__(self, window, 0, 0, self.width, self.height, clicklayer, clickmethod, allow_dragging, allow_hovering)
+		clickRect.__init__(self, window, 0, 0, self.width, self.height, clicklayer, self.click, allow_dragging, allow_hovering)
 		
 		self.textpos.topleft = [0,0]
 		
 		self.topleft = [0,0]
+	
+	def click(self, event, position, drag_pos = None):
+		if self.editable:
+			if is_click(event):
+				self.clickmethod()
 	
 	def move(self, pos):
 		clickRect.move(self, pos)
@@ -300,7 +334,7 @@ class button(clickRect, control):
 		pygame.draw.rect(screen, self.outlinecolor, self, self.outlinewidth)
 		screen.blit(self.text, self.textpos)
 
-#a button control
+#an entry box control
 class entry(clickRect, control):
 	def __init__(self, window, width, clicklayer=1, font=None):
 		control.__init__(self)
@@ -374,11 +408,12 @@ class entry(clickRect, control):
 
 	def event(self, event, position):
 		if event.type == KEYDOWN:
-			if event.key == K_BACKSPACE:
-				if len(self.text) >= 1:
-					self.text = self.text[:-1]
-			else:
-				self.text += event.unicode
+			if self.editable:
+				if event.key == K_BACKSPACE:
+					if len(self.text) >= 1:
+						self.text = self.text[:-1]
+				else:
+					self.text += event.unicode
 		self.rendertext()
 
 #main area for window
@@ -422,7 +457,20 @@ class windowarea(pygame.Surface):
 	def event(self, event, position, dragstartpos=None):
 		position = [position[0] - self.rect.left, position[1] - self.rect.top + self.scrolltop]
 		
-		if is_click(event) or (event.type == MOUSEBUTTONUP and event.button == 1):
+		if event.type == MOUSEBUTTONDOWN and event.button in [4,5]:
+			if event.button == 4:
+				scrolldist = 10
+			else:
+				scrolldist = -10
+			
+			if float(self.rect.height - self.window.scrollbar.height) == 0:
+				newscrollpercent = 0.0
+			else:
+				newscrollpercent = (self.window.scrollbar.top - (self.rect.top + scrolldist)) / float(self.rect.height - self.window.scrollbar.height)		
+			self.scrollpercent = newscrollpercent
+						
+			self.window.scroll(newscrollpercent)
+		elif event.type in [MOUSEBUTTONUP, MOUSEBUTTONDOWN, MOUSEBUTTONDRAGGED, MOUSEBUTTONSTOPDRAG, MOUSEBUTTONHOVER, MOUSEBUTTONSTOPHOVER]:
 			foundrect = False
 			for layernum in range(len(self.clickareas)-1, -1, -1):
 				layer = self.clickareas[layernum]
@@ -435,31 +483,33 @@ class windowarea(pygame.Surface):
 						break
 				if foundrect:
 					break
-		elif event.type == MOUSEBUTTONDOWN and event.button in [4,5]:
-			if event.button == 4:
-				scrolldist = 10
-				print "scrolling up"
-			else:
-				scrolldist = -10
-				print "scrolling down"
-			
-			if float(self.rect.height - self.window.scrollbar.height) == 0:
-				newscrollpercent = 0.0
-			else:
-				newscrollpercent = (self.window.scrollbar.top - (self.rect.top + scrolldist)) / float(self.rect.height - self.window.scrollbar.height)		
-			self.scrollpercent = newscrollpercent
-						
-			self.window.scroll(newscrollpercent)
 		else:
-			self.window.gettablist()[self.window.tabindex].event(event, position)
+			if len(self.window.gettablist()) != 0:
+				self.window.gettablist()[self.window.tabindex].event(event, position)
 
 class Window(pygame.Rect):
 	#init
-	def __init__(self, title, left, top, width, height, scrollbar=False, minwidth=100, minheight=100):
+	def __init__(self, title, width=None, height=None, left=None, top=None, scrollbar=False, minwidth=100, minheight=100):		
+		self.auto_width = False
+		self.auto_height = False
+		if width == None:
+			self.auto_width = True
+			width = minwidth
+		if height == None:
+			self.auto_height = True
+			height = minheight
+
+		centerleft, centertop = placewindow(width, height)
+		if top == None:
+			top=centertop
+		if left == None:
+			left = centerleft
+		
 		pygame.Rect.__init__(self, left, top, width, height)
 		
-		objlists.windows.append(self)
-
+		objlists.windows.insert(0, self)
+		focus(self)
+		
 		self.rectangles = []
 		self.objects = []
 		
@@ -487,9 +537,10 @@ class Window(pygame.Rect):
 		self.area = windowarea(self, self.left + self.areabuffer, self.top + self.titlebarheight + self.areabuffer, self.width-self.areabuffer*2, self.height-self.titlebarheight-self.areabuffer*2)
 
 		#scrollbar
-		self.scrollbar = clickRect(self, self.right-self.areabuffer-self.scrollbarwidth, self.area.rect.top, self.scrollbarwidth, self.area.rect.bottom, 1, self.clickscrollbar, allow_hovering=False)
-		self.addrect(self.scrollbar, stretch=[False, False], addsize=[True, False])		
-		self.resizescrollbar()
+		if self.has_scrollbar:
+			self.scrollbar = clickRect(self, self.right-self.areabuffer-self.scrollbarwidth, self.area.rect.top, self.scrollbarwidth, self.area.rect.bottom, 1, self.clickscrollbar, allow_hovering=False)
+			self.addrect(self.scrollbar, stretch=[False, False], addsize=[True, False])		
+			self.resizescrollbar()
 		
 		#window background
 		self.back = pygame.Surface([width, height])
@@ -515,7 +566,7 @@ class Window(pygame.Rect):
 		
 		#x button
 		buttonbuffer = 2
-		self.xbutton = clickSprite(self, "gui", "x.png", self.close, clicklayer=3)
+		self.xbutton = clickSprite(self, "gui", "x.png", self.close_button, clicklayer=3)
 		self.xbutton.rect.topleft = [self.right-buttonbuffer-self.xbutton.rect.width,self.top+buttonbuffer]
 		self.addrect(self.xbutton.rect, addsize=[True, False])
 		self.objects.append(self.xbutton)
@@ -567,8 +618,6 @@ class Window(pygame.Rect):
 		self.boundarybuffer = self.cornerresizebuffer
 		self.boundaries = rect(self.left - self.boundarybuffer, self.top - self.boundarybuffer, self.width + 2*self.boundarybuffer, self.height + 2*self.boundarybuffer)
 		self.addrect(self.boundaries, stretch=[True, True])
-
-
 			
 	#add control to window
 	def pack(self, rect, direction="down"):
@@ -593,9 +642,42 @@ class Window(pygame.Rect):
 			
 			self.packlist[len(self.packlist)-1].append(rect)
 			rect.move([packnextx, packnexty])
+
 		self.area.objects.append(rect)
-		self.resizescrollbar()
+
+		if self.has_scrollbar:
+			self.resizescrollbar()
 		
+		if self.auto_height:
+			newheight = self.getareaheight()
+			newheight += self.height - self.area.rect.height
+			newheight = max(newheight, self.minsize[0])
+			self.originalpos[1] = self.top
+			self.originalsize[1] = self.height
+			self.resize(newheight-self.height, self.originalpos, self.originalsize, "bottom")
+		if self.auto_width:
+			newwidth = self.getareawidth()
+			newwidth += self.width - self.area.rect.width
+			newwidth = max(newwidth, self.minsize[1])
+			self.originalpos[0] = self.left
+			self.originalsize[0] = self.width
+			self.resize(newwidth-self.width, self.originalpos, self.originalsize, "right")
+	
+	def unpack(self, rect=None):
+		if rect == None:
+			self.packlist = []
+			self.area.objects = []
+		else:
+			for index, column in enumerate(self.packlist): #@UnusedVariable
+				try:
+					self.packlist[index].remove(rect)
+					break
+				except:
+					pass
+			self.area.objects.remove(rect)
+		if self.has_scrollbar:
+			self.resizescrollbar()
+			
 	def getareaheight(self):
 		#get distance to last column
 		if len(self.packlist) == 0:
@@ -608,6 +690,24 @@ class Window(pygame.Rect):
 			height += columnheight
 		
 		return height
+	
+	def getareawidth(self):
+		#get distance to last column
+		if len(self.packlist) == 0:
+			width = 0
+		else:
+			columnwidths = []
+			for layer in self.packlist:
+				columnwidth = 0
+				for obj in layer:
+					try:
+						columnwidth += obj.width
+						columnwidth += self.packbuffer
+					except:
+						pass
+				columnwidths.append(columnwidth)
+			width = max(columnwidths)
+		return width
 	
 	#window has changed, update scrollbar
 	def resizescrollbar(self):
@@ -648,6 +748,7 @@ class Window(pygame.Rect):
 		if self.area.scrolltop == 0:
 			self.area.scrollpercent = 0.0
 		self.scrollbar.top = float(self.area.rect.height - self.scrollbar.height) * self.area.scrollpercent + self.area.rect.top	
+		self.scrollbar.starttopleft = self.calcstarttopleft(self.scrollbar)
 	
 	#get lists of controls that can be selected
 	def gettablist(self):
@@ -685,9 +786,12 @@ class Window(pygame.Rect):
 		self.rectangles.append(rect)
 	
 	#close window
-	def close(self, event, position, dragpos):
+	def close_button(self, event, position, dragpos):
 		if event.type == MOUSEBUTTONUP:
-			objlists.windows.remove(self)
+			self.close()
+	
+	def close(self):
+		objlists.windows.remove(self)
 	
 	#calculate difference between topleft of window and topleft of widget
 	def calcstarttopleft(self, rect):
@@ -782,7 +886,8 @@ class Window(pygame.Rect):
 						rectangle.height = originalsize[1] + vector + rectangle.startbottomright[1] - rectangle.starttopleft[1]
 					rectangle.top = originalpos[1] + rectangle.starttopleft[1] + addtopleft[1]
 		if side == "top" or side == "bottom":
-			self.resizescrollbar()
+			if self.has_scrollbar:
+				self.resizescrollbar()
 	
 	#add width or height to control topleft if needed
 	def calcaddtopleft(self, rectangle):
@@ -810,7 +915,7 @@ class Window(pygame.Rect):
 	
 	#get mouse event
 	def event(self, event, position):
-		if is_click(event) or (event.type == MOUSEBUTTONUP and event.button == 1):
+		if event.type == MOUSEBUTTONDOWN or event.type == MOUSEBUTTONUP:
 			foundrect = False
 			for layernum in range(len(self.clickareas)-1, -1, -1):
 				layer = self.clickareas[layernum]
@@ -834,10 +939,11 @@ class Window(pygame.Rect):
 		for layer in self.clickareas:
 			for rect in layer:
 				if rect.dragged:
-					if pygame.mouse.get_pressed()[0] == False:
+					if pygame.mouse.get_pressed()[0] == False and pygame.mouse.get_pressed()[2] == False:
 						rect.click(pygame.event.Event(MOUSEBUTTONSTOPDRAG), position)
 					else:
-						rect.click(pygame.event.Event(MOUSEBUTTONDRAGGED), position)
+						button = pygame.mouse.get_pressed().index(True)+1
+						rect.click(pygame.event.Event(MOUSEBUTTONDRAGGED, {"button":button}), position)
 				if rect.allow_hovering:
 					if not rect.hovering:
 						if rect.collidepoint(position):
@@ -850,7 +956,8 @@ class Window(pygame.Rect):
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("white"), self)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self, 3)
-		pygame.draw.rect(screen, pygame.color.Color("black"), self.scrollbar, 1)
+		if self.has_scrollbar:
+			pygame.draw.rect(screen, pygame.color.Color("black"), self.scrollbar, 1)
 		pygame.draw.rect(screen, pygame.color.Color("cyan"), self.titlebar)
 		pygame.draw.rect(screen, pygame.color.Color("grey"), self.titlebar, 3)
 		screen.blit(self.text, self.textpos)
@@ -863,90 +970,77 @@ class Window(pygame.Rect):
 				resizebar = self.resizebars[i]
 				pygame.draw.rect(screen, pygame.color.Color("green"), resizebar)
 
-#keeps track of ALL objects
-class ObjectLists():
-	def __init__(self):
-		pass
-
-#main window
-class mainwindow(Window):
-	def __init__(self):
-		Window.__init__(self, "Main Window", 100, 100, 100, 500)
-
-		self.testbutton = button(self.area, "Hello World!", self.testbuttonclick)
-		self.pack(self.testbutton)
-		
-	def testbuttonclick(self, event, position, dragpos):
-		if event.type == MOUSEBUTTONUP:
-			print "Hello world!"
-
-#test window
-class testwindow(Window):
-	def __init__(self):
-		Window.__init__(self, "Test Window", 400, 100, 200, 400, scrollbar=True)
-		
-		self.testlabel = label("Hello World:")
-		self.pack(self.testlabel)
-		
-		self.testbutton = button(self.area, "Hello World 3!", self.testbuttonclick)
-		self.pack(self.testbutton, "right")
-
-		self.nexttest = button(self.area, "Hello world 4!", self.testbuttonclick)
-		self.pack(self.nexttest)
-		
-		self.entrylabel = label("enter:")
-		self.pack(self.entrylabel)
-
-		self.nexttest = entry(self.area, 100)
-		self.pack(self.nexttest, "right")
-
-		self.check = checkbox(self.area, "hello world")
-		self.pack(self.check)
-		
-		self.pict = picturebox(self.area, "test", "euohtasn.png")
-		self.pack(self.pict)
-		
-		self.pack(label("hi"))
-		self.pack(label("hi"))
-		self.pack(label("hi"))
-		self.pack(label("hi"))
-		self.pack(label("hi"))
-	
-	def testbuttonclick(self, event, position, dragpos):
-		if event.type == MOUSEBUTTONUP:
-			print "Hello world!"
+#place a window randomly
+def placewindow(sizex, sizey):
+	x=screensize[0]/2.0 - sizex/2.0
+	y=screensize[1]/2.0 - sizey/2.0
+	return x, y
 
 #run on main
-def main():
+def pygameinit():
 	#Initialize Everything
 	pygame.init()
-	screen = pygame.display.set_mode(screensize)
+	objlists.screen = pygame.display.set_mode(screensize)
 	pygame.display.set_caption('Project')
-
-	#Create The Backgound
-	background = pygame.Surface(screen.get_size())
-	background = background.convert()
-	background.fill((20,20,20))
+	
+	#Create The Background
+	objlists.background = pygame.Surface(objlists.screen.get_size())
+	objlists.background = objlists.background.convert()
+	objlists.background.fill((20,20,20))
 
 	#Objects
 	objlists.allsprites = pygame.sprite.RenderPlain(())
-	objlists.windows = []
-	objlists.clickareas = []
-	clock = pygame.time.Clock()
+	objlists.clock = pygame.time.Clock()
 	
 	#Display The Background
-	screen.blit(background, (0, 0))
+	objlists.screen.blit(objlists.background, (0, 0))
 	pygame.display.flip()
-	
-	mainwindow()
-	testwindow()
 	
 	pygame.key.set_repeat(500, 50)
 	
+def focus(window):
+	if len(objlists.windows) != 0:
+		if not window in objlists.unfocusable:
+			try:
+				objlists.windows.insert(0, objlists.windows.pop(objlists.windows.index(window)))
+			except:
+				pass
+			
+def send_to_back(window):
+	if len(objlists.windows) != 0:
+		objlists.windows.append(objlists.windows.pop(objlists.windows.index(window)))
+		
+class inputbox(Window):
+	def __init__(self, title, question, method):
+		Window.__init__(self, title, scrollbar=True)
+		
+		self.method = method
+		
+		self.questionlabel = label(question)
+		self.pack(self.questionlabel)
+		
+		self.entrybox = entry(self.area, 100)
+		self.pack(self.entrybox)
+		
+		self.tab(0)
+		
+		self.cancelbutton = button(self.area, "Cancel", self.cancel)
+		self.pack(self.cancelbutton)
+		self.okbutton = button(self.area, "OK", self.ok)
+		self.pack(self.okbutton, "right")
+		
+	def ok(self):
+		self.method(self.entrybox.text)
+		self.close()
+	
+	def cancel(self):
+		self.close()
+
+def mainloop(mainwindow):
 	#Main Loop
 	while True:
-		clock.tick(60)
-
+		objlists.clock.tick(60)
+		
 		#Handle Input Events
 		for event in pygame.event.get():
 			position = pygame.mouse.get_pos()
@@ -959,27 +1053,23 @@ def main():
 				for windowindex in range(0, len(objlists.windows)):
 					window = objlists.windows[windowindex]
 					if window.boundaries.collidepoint(position):
-						window.event(event, position)
 						if event.type in [MOUSEBUTTONDOWN, MOUSEBUTTONUP] and event.button == 1:
 							#focus window
-							if len(objlists.windows) != 0:
-								objlists.windows.insert(0, objlists.windows.pop(windowindex))
+							focus(window)
+						#event
+						window.event(event, position)
 						break
 
 		objlists.allsprites.update()
 		for window in objlists.windows:
 			window.update()
-
+		
 		#Draw Everything
-		screen.blit(background, (0, 0))
-		objlists.allsprites.draw(screen)
+		objlists.screen.blit(objlists.background, (0, 0))
+		objlists.allsprites.draw(objlists.screen)
 		for windowindex in range(len(objlists.windows)-1, -1, -1):
 			window = objlists.windows[windowindex]
-			window.draw(screen)
+			window.draw(objlists.screen)
 		if len(objlists.windows) == 0:
 			mainwindow()
 		pygame.display.flip()
-
-if __name__ == "__main__":
-	objlists = ObjectLists()
-	main()

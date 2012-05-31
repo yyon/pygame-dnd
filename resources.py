@@ -1,5 +1,5 @@
 import os, pygame
-from pygame.locals import *
+from pygame.locals import * #@UnusedWildImport
 
 if not pygame.font: print 'Warning, fonts disabled'
 if not pygame.mixer: print 'Warning, sound disabled'
@@ -10,8 +10,8 @@ def load_image(folder, name, colorkey=None, alpha=True):
 	fullpath = fullname(folder, name)
 	try:
 		image = pygame.image.load(fullpath)
-	except pygame.error, message:
-		success = False
+	except:
+		pass
 	if alpha:
 		image = image.convert_alpha()
 	else:
