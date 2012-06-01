@@ -8,10 +8,7 @@ resfolder = "res"
 
 def load_image(folder, name, colorkey=None, alpha=True):
 	fullpath = fullname(folder, name)
-	try:
-		image = pygame.image.load(fullpath)
-	except:
-		pass
+	image = pygame.image.load(fullpath)
 	if alpha:
 		image = image.convert_alpha()
 	else:
