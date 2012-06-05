@@ -1,0 +1,10 @@
+windows = []
+clickareas = []
+unfocusable = []
+screen = None
+allsprites = None
+background=None
+clock=None
+dungeonmap=None
+editorwindows = []
+clickoffwindows = []
