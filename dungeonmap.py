@@ -25,6 +25,7 @@ class Map(pygame.Surface):
 	def __init__(self, area):
 		pygame.Surface.__init__(self, (screensize[0], screensize[1]))
 		self.area = area
+		self.area.resize(screensize)
 		self.window = self.area.window
 		self.rect = clickRect(self.area, self.get_rect().left, self.get_rect().top, self.get_rect().width, self.get_rect().height, 1, self.click, True, True)
 
@@ -149,7 +150,8 @@ class Map(pygame.Surface):
 		menuitems = []
 		
 		if self.getentities(position) != []:
-			menuitems.append(["remove", functools.partial(self.removeentity, position)])
+			if self.mode == "edit":
+				menuitems.append(["remove", functools.partial(self.removeentity, position)])
 		
 		menu(menuitems)
 	
@@ -178,6 +180,16 @@ class Map(pygame.Surface):
 			if entity[1] == pos:
 				self.entities.remove(entity)
 				break
+			
+	def renameentity(self, originalname, newname):
+		tilenamedatabase = data.database("", "entitynames")
+		originalnameindex = tilenamedatabase.reverseget(originalname, None)
+		tilenamedatabase.set(originalnameindex, newname)
+		tilenamedatabase.write()
+
+		for index, entity in self.entities:
+			if entity[0] == originalname:
+				self.entities[index][0] = newname
 		
 	def renametile(self, originalname, newname):
 		tilenamedatabase = data.database("", "tilenames")
@@ -201,6 +213,7 @@ class Map(pygame.Surface):
 	def refreshentities(self):
 		for entity in os.listdir(os.path.join(data.datafolder, entityfolder)):
 			self.entityicons[entity], rect = resources.load_image(os.path.join(entityimgfolder, entity), "icon.png")
+			self.entityicons[entity] = pygame.transform.scale(self.entityicons[entity], (entitysize[0], entitysize[1]))
 	
 	def update(self):
 		self.width, self.height = self.area.rect.width, self.area.rect.height
@@ -243,11 +256,13 @@ class Map(pygame.Surface):
 				for x, tile in enumerate(line.split(":")):
 					tile = tilenamedatabase.get(tile, "blank")
 					self.map[y][x] = self.tilesprite(tile)
+
+		entitynamedatabase = data.database("", "entitynames")
 					
 		entitystring = data.get_data(mapentityfolder, self.mapname)
 		for line in entitystring.split("\n"):
 			if line != "":
-				self.entities.append([line.split(":")[1], [int(line.split(":")[0].split(",")[0]), int(line.split(":")[0].split(",")[1])]])
+				self.entities.append([entitynamedatabase.get(line.split(":")[1], None), [int(line.split(":")[0].split(",")[0]), int(line.split(":")[0].split(",")[1])]])
 	
 	def savemap(self):
 		if self.mapname != None:
@@ -269,9 +284,12 @@ class Map(pygame.Surface):
 			mapproperties.write()
 			
 			entitystring = ""
+
+			entitynamedatabase = data.database("", "entitynames")
 			
 			for entity in self.entities:
-				entitystring += str(entity[1][0]) + "," + str(entity[1][1]) + ":" + str(entity[0]) + "\n"
+				entitystring += str(entity[1][0]) + "," + str(entity[1][1]) + ":" + str(entitynamedatabase.reverseget(str(entity[0]), None)) + "\n"
+			entitynamedatabase.write()
 				
 			data.set_data(entitystring, mapentityfolder, self.mapname)
 

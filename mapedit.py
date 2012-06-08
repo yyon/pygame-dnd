@@ -1,5 +1,6 @@
 from gui import * #@UnusedWildImport
 import dungeonmap #@UnusedWildImport
+import entityeditor
 import shutil
 import data
 import copy
@@ -95,14 +96,24 @@ class tiles(Window):
 			self.tilebuttons[tilename]=imgbutton
 			self.pack(imgbutton)
 			
+			group = controlgroup(self)
+			
 			editbutton = picturebox(self, "gui", "edit.png", clickevent=functools.partial(self.edittile, tilename), size=[25,25])
-			self.pack(editbutton, "right")
+			group.pack(editbutton)
+
+			editbutton = picturebox(self, "gui", "rename.png", clickevent=functools.partial(self.rename, tilename), size=[25,25])
+			group.pack(editbutton, "right")
 
 			copybutton = picturebox(self, "gui", "copy.png", clickevent=functools.partial(self.startcopytile, tilename), size=[25,25])
-			self.pack(copybutton, "right")
+			group.pack(copybutton, "right")
 
 			delbutton = picturebox(self, "gui", "delete.png", clickevent=functools.partial(self.deletetile, tilename), size=[25,25])
-			self.pack(delbutton, "right")
+			group.pack(delbutton, "right")
+			
+			namelabel = label(self, tilename)
+			group.pack(namelabel)
+			
+			self.pack(group, "right")
 			
 		objlists.dungeonmap.refreshtiles()
 	
@@ -119,6 +130,16 @@ class tiles(Window):
 	def finishcopytile(self, oldtile, newtile):
 		shutil.copy(resources.fullname(dungeonmap.tileimgfolder, oldtile+".png"), resources.fullname(dungeonmap.tileimgfolder, newtile+".png"))
 		shutil.copy(data.fullname(dungeonmap.tilefolder, oldtile), data.fullname(dungeonmap.tilefolder, newtile))
+		self.refreshlist()
+		
+	def rename(self, tile):
+		inputbox("Tile Name", "Enter new tile name", functools.partial(self.newname, tile))
+	
+	def newname(self, oldname, newname):
+		shutil.move(resources.fullname(dungeonmap.tileimgfolder, oldname+".png"), resources.fullname(dungeonmap.tileimgfolder, newname+".png"))
+		shutil.move(data.fullname(dungeonmap.tilefolder, oldname), data.fullname(dungeonmap.tilefolder, newname))
+		objlists.dungeonmap.renametile(oldname, newname)
+		
 		self.refreshlist()
 	
 	def deletetile(self, tile):
@@ -164,16 +185,37 @@ class entitieswindow(Window):
 			self.entitybuttons[entity]=imgbutton
 			self.pack(imgbutton)
 			
-			editbutton = picturebox(self, "gui", "edit.png", clickevent=functools.partial(self.editentity, entity), size=[25,25])
-			self.pack(editbutton, "right")
+			group = controlgroup(self)
 
+			editbutton = picturebox(self, "gui", "edit.png", clickevent=functools.partial(self.editentity, entity), size=[25,25])
+			group.pack(editbutton)
+
+			editbutton = picturebox(self, "gui", "rename.png", clickevent=functools.partial(self.rename, entity), size=[25,25])
+			group.pack(editbutton, "right")
+
+			typebutton = picturebox(self, "gui", "type.png", clickevent=functools.partial(self.changetype, entity), size=[25,25])
+			group.pack(typebutton, "right")
+			
 			copybutton = picturebox(self, "gui", "copy.png", clickevent=functools.partial(self.startcopyentity, entity), size=[25,25])
-			self.pack(copybutton, "right")
+			group.pack(copybutton, "right")
 
 			delbutton = picturebox(self, "gui", "delete.png", clickevent=functools.partial(self.deleteentity, entity), size=[25,25])
-			self.pack(delbutton, "right")
+			group.pack(delbutton, "right")
 			
+			name = label(self, entity)
+			group.pack(name)
+			
+			self.pack(group, "right")
+
 		objlists.dungeonmap.refreshentities()
+	
+	def changetype(self, entity):
+		entityeditor.entitytypeselector(functools.partial(self.finishchangetype, entity))
+		
+	def finishchangetype(self, entity, type):
+		database = data.database(dungeonmap.entityfolder, entity)
+		database.set("type", type)
+		database.write()
 	
 	def selectentity(self, entity):
 		objlists.dungeonmap.selectedentity = entity #@UnusedVariable
@@ -187,6 +229,17 @@ class entitieswindow(Window):
 		data.get_data(dungeonmap.entityfolder, name)
 		self.refreshlist()
 #		self.editentity(self, name)
+
+	def rename(self, tile):
+		inputbox("Entity Name", "Enter new entity name", functools.partial(self.newname, tile))
+	
+	def newname(self, oldentity, newentity):
+		shutil.copytree(resources.fullname(dungeonmap.entityimgfolder, oldentity), resources.fullname(dungeonmap.entityimgfolder, newentity))
+		shutil.rmtree(resources.fullname(dungeonmap.entityimgfolder, oldentity))
+		shutil.move(data.fullname(dungeonmap.entityfolder, oldentity), data.fullname(dungeonmap.entityfolder, newentity))
+		objlists.dungeonmap.renameentity(oldentity, newentity)
+		
+		self.refreshlist()
 	
 	def startcopyentity(self, tile):
 		inputbox("Entity Name", "Enter new entity name", functools.partial(self.finishcopyentity, tile))
@@ -204,7 +257,8 @@ class entitieswindow(Window):
 		self.refreshlist()
 	
 	def editentity(self, name):
-		edittile(name, self)
+		database = data.database(dungeonmap.entityfolder, name)
+		entityeditor.editors[database.get("type", entityeditor.entitytypes[0])](name, self)
 	
 	def refreshlist(self):
 		self.unpack()
@@ -220,7 +274,7 @@ class entitieswindow(Window):
 		
 class edittile(Window):
 	def __init__(self, tilename, tilewindow, scrollbar=True):
-		Window.__init__(self, "Tile")
+		Window.__init__(self, tilename)
 		
 		self.name = tilename
 		self.originalname = copy.copy(self.name)
@@ -229,12 +283,9 @@ class edittile(Window):
 
 		self.database = data.database(dungeonmap.tilefolder, self.name)
 		
-		self.namelabel = label(self, "Name: " + self.name)
-		self.pack(self.namelabel)
-		
-		self.renamebutton = button(self, "Rename", self.rename)
-		self.pack(self.renamebutton)
-		
+#		self.namelabel = label(self, "Name: " + self.name)
+#		self.pack(self.namelabel)
+				
 		self.imagebox = picturebox(self, dungeonmap.tileimgfolder, self.name+".png", size=[50,50])
 		self.pack(self.imagebox)
 		
@@ -251,22 +302,6 @@ class edittile(Window):
 	def refresh(self):
 		self.imagebox.makesprite()
 		self.namelabel.text = self.name
-	
-	def rename(self):
-		inputbox("Tile Name", "Enter new tile name", self.newname)
-	
-	def newname(self, newname):
-		shutil.move(resources.fullname(dungeonmap.tileimgfolder, self.name+".png"), resources.fullname(dungeonmap.tileimgfolder, newname+".png"))
-		shutil.move(data.fullname(dungeonmap.tilefolder, self.name), data.fullname(dungeonmap.tilefolder, newname))
-		objlists.dungeonmap.renametile(self.name, newname)
-		self.name = newname
-		
-		self.namelabel.text = "Name: "+self.name
-		self.imagebox.imagefolder = dungeonmap.tileimgfolder
-		self.imagebox.imagename = self.name+".png"
-		self.imagebox.makesprite()
-		
-		self.tilewindow.refreshlist()
 		
 class mapselector(Window):
 	def __init__(self, method):

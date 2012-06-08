@@ -106,6 +106,7 @@ class control():
 		self.tabbable = False
 		self.editable = True
 		self.window = window
+		self.visible = True
 	def select(self):
 		pass
 	def deselect(self):
@@ -212,23 +213,30 @@ class checkbox(rect, control):
 		self.sprite.move(pos)
 
 #a label control
-class label(rect, control):
-	def __init__(self, window, text, font=None):
+class label(clickRect, control):
+	def __init__(self, window, text, method=None, font=None, fontsize=14):
 		control.__init__(self, window)
 		pos=[0,0]
 		
 		self.font = font
 		self.text = text
 		
+		self.method = method
+		
 		if self.font == None:
-			self.font = pygame.font.Font(None, 14)
+			self.font = pygame.font.Font(None, fontsize)
 		self.label = self.font.render(self.text, 1, (0,0,0))
-		rect.__init__(self, self.label.get_rect())
+		clickRect.__init__(self, self.window, self.label.get_rect().left, self.label.get_rect().top, self.label.get_rect().width, self.label.get_rect().height, 1, self.click)
 		
 		self.move(pos)
 		
+	def click(self, event, position, dragpos=None):
+		if is_click(event):
+			if self.method != None:
+				self.method()
+		
 	def move(self, pos):
-		rect.move(self, pos)
+		clickRect.move(self, pos)
 	
 	def draw(self, screen):
 		self.label = self.font.render(self.text, 1, (0,0,0))
@@ -340,7 +348,7 @@ class menuitem(clickRect, control):
 
 #an entry box control
 class entry(clickRect, control):
-	def __init__(self, window, width, clicklayer=1, font=None, method=None):
+	def __init__(self, window, width, clicklayer=1, font=None, method=None, numbers=False):
 		control.__init__(self, window)
 		
 		self.textpospos = [0,0]
@@ -354,10 +362,14 @@ class entry(clickRect, control):
 		self.controlwidth = width
 
 		self.textbuffer = 3
+		self.controlwidth -= self.textbuffer * 2
 		
 		self.tabbable = True
 		
 		self.method = method
+		self.changemethod = []
+		
+		self.numbers = numbers
 		
 		self.outlinecolor = pygame.color.Color("black")
 		
@@ -381,7 +393,7 @@ class entry(clickRect, control):
 			self.rectangles.remove(self.rtextpos)
 		except:
 			pass
-		self.rtext = self.font.render(self.text, 1, (0,0,0))
+		self.rtext = self.font.render(str(self.text), 1, (0,0,0))
 		self.rtextpos = rect(self.rtext.get_rect())
 		self.rtextpos.width = self.controlwidth
 		self.rtextpos.move(self.textpospos)
@@ -416,13 +428,22 @@ class entry(clickRect, control):
 		if event.type == KEYDOWN:
 			if self.editable:
 				if event.key == K_BACKSPACE:
-					if len(self.text) >= 1:
-						self.text = self.text[:-1]
+					if len(str(self.text)) >= 1:
+						self.text = str(self.text)[:-1]
+						if self.changemethod != []:
+							for method in self.changemethod:
+								method()
 				elif event.key == K_RETURN:
 					if self.method != None:
 						self.method()
 				else:
-					self.text += event.unicode
+					key = event.unicode
+					if self.numbers == False or str(key) in ["1","2","3","4","5","6","7","8","9","0"]:
+						self.text = str(self.text)
+						self.text += key
+						if self.changemethod != []:
+							for method in self.changemethod:
+								method()
 		self.rendertext()
 
 class eventhandler():
@@ -490,9 +511,9 @@ class windowarea(pygame.Surface, eventhandler):
 	def __init__(self, window, left, top, width, height):
 		self.window = window
 		
-		pygame.Surface.__init__(self, (screensize[0], screensize[1]))
+		self.resize([1,1])
 		eventhandler.__init__(self, self.window, self)
-
+		
 		self.rect = clickRect(window, self.get_rect().left, self.get_rect().top, self.get_rect().width, self.get_rect().height, 1, self.event, False, False)
 		self.rect.topleft = [left, top]
 		self.rect.width = width
@@ -507,11 +528,14 @@ class windowarea(pygame.Surface, eventhandler):
 		self.scrolltop = 0
 		
 		self.objects = []
+		
+	def resize(self, size):
+		pygame.Surface.__init__(self, (int(size[0]), int(size[1])))
 	
 	def draw(self, screen):
 		screenrect = rect(0, self.scrolltop, self.rect.width, self.rect.height)
 		screen.blit(self, [self.rect.left,self.rect.top], area=screenrect)
-		pygame.draw.rect(self, pygame.color.Color(240, 240, 240), screenrect)
+		pygame.draw.rect(self, pygame.color.Color("white"), screenrect)
 		for obj in self.objects:
 			obj.draw(self)
 			
@@ -525,18 +549,19 @@ class windowarea(pygame.Surface, eventhandler):
 	
 	def event(self, event, position, dragstartpos=None):
 		if event.type == MOUSEBUTTONDOWN and event.button in [4,5]:
-			if event.button == 4:
-				scrolldist = 10
-			else:
-				scrolldist = -10
-			
-			if float(self.rect.height - self.window.scrollbar.height) == 0:
-				newscrollpercent = 0.0
-			else:
-				newscrollpercent = (self.window.scrollbar.top - (self.rect.top + scrolldist)) / float(self.rect.height - self.window.scrollbar.height)		
-			self.scrollpercent = newscrollpercent
-						
-			self.window.scroll(newscrollpercent)
+			if self.window.has_scrollbar:
+				if event.button == 4:
+					scrolldist = 10
+				else:
+					scrolldist = -10
+				
+				if float(self.rect.height - self.window.scrollbar.height) == 0:
+					newscrollpercent = 0.0
+				else:
+					newscrollpercent = (self.window.scrollbar.top - (self.rect.top + scrolldist)) / float(self.rect.height - self.window.scrollbar.height)		
+				self.scrollpercent = newscrollpercent
+							
+				self.window.scroll(newscrollpercent)
 		else:
 			eventhandler.event(self, event, position)
 
@@ -558,15 +583,16 @@ class windowarea(pygame.Surface, eventhandler):
 		eventhandler.update(self)
 
 class grid():
-	def __init__(self):
+	def __init__(self, packoffset=[0,0]):
 		self.packlist = []
 		self.packbuffer = 4
+		self.packoffset = packoffset
 	
 	def repack(self):
 		for y, layer in enumerate(self.packlist):
 			for x, rect in enumerate(layer): #@UnusedVariable
 				if y == 0:
-					posy = 0
+					posy = self.packoffset[1]
 				else:
 					height = self.packlist[y-1][0].top
 					#add height of last column
@@ -575,8 +601,8 @@ class grid():
 					height += columnheight
 					posy = height
 					posy += self.packbuffer
-			
-				posx = 0
+				
+				posx = self.packoffset[0]
 				for obj in layer[:x]:
 					posx += obj.width
 					posx += self.packbuffer
@@ -604,10 +630,178 @@ class grid():
 				except:
 					pass
 			self.repack()
+	
+	def getheight(self):
+		#get distance to last column
+		if len(self.packlist) == 0:
+			height = 0
+		else:
+			height = self.packlist[-1][0].top - self.packoffset[1]
+			#add height of last column
+			columnheights = [obj.height for obj in self.packlist[-1]]
+			columnheight = max(columnheights)
+			height += columnheight
+		
+		return height
+	
+	def getwidth(self):
+		#get distance to last column
+		if len(self.packlist) == 0:
+			width = 0
+		else:
+			columnwidths = []
+			for layer in self.packlist:
+				columnwidth = 0
+				for obj in layer:
+					try:
+						columnwidth += obj.width
+						columnwidth += self.packbuffer
+					except:
+						pass
+				columnwidths.append(columnwidth)
+			width = max(columnwidths)
+		return width
+
+class controlgroup(rect, grid, control):
+	def __init__(self, window):
+		rect.__init__(self, 0, 0, 1, 1)
+		control.__init__(self, window)
+		self.window = window
+		grid.__init__(self)
+		
+	def pack(self, rect, direction = "down"):
+		grid.pack(self, rect, direction)
+		self.recalcsize()
+		
+	def recalcsize(self):
+		if self.visible:
+			self.packoffset = self.topleft
+			self.width = self.getwidth()
+			self.height = self.getheight()
+		else:
+			self.width = 0
+			self.height = 0
+		
+	def repack(self):
+		self.recalcsize()
+		grid.repack(self)
+		self.window.repack()
+		
+	def move(self, pos):
+		for layer in self.packlist:
+			for obj in layer:
+				posoffset = [obj.left - self.left, obj.top - self.top]
+				newpos = [pos[0] + posoffset[0], pos[1] + posoffset[1]]
+				obj.move(newpos)
+		rect.move(self, pos)
+		
+	def draw(self, screen):
+		if self.visible:
+			for layer in self.packlist:
+				for obj in layer:
+					obj.draw(screen)
+	
+class drawer(controlgroup):
+	def __init__(self, window, title):
+		controlgroup.__init__(self, window)
+		
+		self.titlearea = controlgroup(window)
+		
+		self.togglebutton = picturebox(window, "gui", "arrowdown.png", size=[20,20], clickevent=self.togglevisible)
+		self.titlearea.pack(self.togglebutton)
+		
+		self.titlelabel = label(window, title, fontsize=20)
+		self.titlearea.pack(self.titlelabel, "right")
+		
+		self.items = controlgroup(window)
+		
+		self.itemsvisible = False
+		self.itemspacked = False
+		
+		self.refresh()
+		
+	def togglevisible(self):
+		self.itemsvisible = not self.itemsvisible
+		self.refresh()
+		
+	def refresh(self):
+		self.unpack()
+		
+		controlgroup.pack(self, self.titlearea)
+		
+		if self.itemsvisible:
+			self.togglebutton.imagename = "arrowdown.png"
+		else:
+			self.togglebutton.imagename = "arrowside.png"
+		self.togglebutton.refresh()
+
+		if self.itemsvisible:
+			if self.itemspacked == False:
+				self.packitems()
+				self.itemspacked = True
+			controlgroup.pack(self, self.items)
+		
+		self.recalcsize()
+		self.repack()
+		
+	def packitems(self):
+		pass
+		
+	def pack(self, rect, direction="down"):
+		self.items.pack(rect, direction)
+		self.refresh()
+
+class listbox(controlgroup):
+	def __init__(self, window, title, items, method=None):
+		controlgroup.__init__(self, window)
+		
+		self.items = items
+		self.title = title
+		self.method = method
+		
+		self.refreshitems()
+		
+	def refreshitems(self):
+		self.unpack()
+		
+		addbutton = picturebox(self.window, "gui", "plus.png", clickevent=self.startadditem, size=[10,10])
+		self.pack(addbutton)
+		
+		titlelabel = label(self.window, self.title)
+		self.pack(titlelabel, "right")
+		
+		for item in list(self.items):
+			removebutton = picturebox(self.window, "gui", "minus.png", clickevent=functools.partial(self.removeitem, item), size=[10,10])
+			self.pack(removebutton)
+			
+			itemlabel = label(self.window, item, functools.partial(self.click, item))
+			self.pack(itemlabel, "right")
+			
+		self.recalcsize()
+		self.repack()
+	
+	def repack(self):
+		self.packoffset = [self.left, self.top]
+		grid.repack(self)
+	
+	def click(self, item):
+		if self.method != None:
+			self.method(item)
+		
+	def removeitem(self, item):
+		self.items.remove(item)
+		self.refreshitems()
+		
+	def startadditem(self):
+		inputbox("New Item", "Enter new item", self.finishadditem)
+	
+	def finishadditem(self, newitem):
+		self.items.append(newitem)
+		self.refreshitems()
 
 class Window(pygame.Rect, grid, eventhandler):
 	#init
-	def __init__(self, title, width=None, height=None, left=None, top=None, scrollbar=False, has_titlebar=True, minwidth=100, minheight=100):		
+	def __init__(self, title, width=None, height=None, left=None, top=None, scrollbar=False, has_titlebar=True, minwidth=100, minheight=50):		
 		self.auto_width = False
 		self.auto_height = False
 		if width == None:
@@ -761,17 +955,19 @@ class Window(pygame.Rect, grid, eventhandler):
 		if self.auto_height:
 			newheight = self.getareaheight()
 			newheight += self.height - self.area.rect.height
-			newheight = max(newheight, self.minsize[0])
+			newheight = max(newheight, self.minsize[1])
 			self.originalpos[1] = self.top
 			self.originalsize[1] = self.height
 			self.resize(newheight-self.height, self.originalpos, self.originalsize, "bottom")
 		if self.auto_width:
 			newwidth = self.getareawidth()
 			newwidth += self.width - self.area.rect.width
-			newwidth = max(newwidth, self.minsize[1])
+			newwidth = max(newwidth, self.minsize[0])
 			self.originalpos[0] = self.left
 			self.originalsize[0] = self.width
 			self.resize(newwidth-self.width, self.originalpos, self.originalsize, "right")
+		
+		self.area.resize([self.getareawidth(), self.getareaheight()])
 
 		if self.has_scrollbar:
 			self.resizescrollbar()
@@ -788,35 +984,10 @@ class Window(pygame.Rect, grid, eventhandler):
 			self.resizescrollbar()
 			
 	def getareaheight(self):
-		#get distance to last column
-		if len(self.packlist) == 0:
-			height = 0
-		else:
-			height = self.packlist[-1][0].top
-			#add height of last column
-			columnheights = [obj.height for obj in self.packlist[-1]]
-			columnheight = max(columnheights)
-			height += columnheight
-		
-		return height
+		return grid.getheight(self)
 	
 	def getareawidth(self):
-		#get distance to last column
-		if len(self.packlist) == 0:
-			width = 0
-		else:
-			columnwidths = []
-			for layer in self.packlist:
-				columnwidth = 0
-				for obj in layer:
-					try:
-						columnwidth += obj.width
-						columnwidth += self.packbuffer
-					except:
-						pass
-				columnwidths.append(columnwidth)
-			width = max(columnwidths)
-		return width
+		return grid.getwidth(self)
 	
 	#window has changed, update scrollbar
 	def resizescrollbar(self):
@@ -1128,6 +1299,11 @@ class menu(Window):
 		
 	def clickoff(self):
 		self.close()
+		
+def close():
+	for window in objlists.windows:
+		window.close()
+	pygame.quit()
 
 def mainloop(mainwindow):
 	#Main Loop
@@ -1138,9 +1314,9 @@ def mainloop(mainwindow):
 		for event in pygame.event.get():
 			position = pygame.mouse.get_pos()
 			if event.type == QUIT:
-				return
+				close()
 			elif event.type == KEYDOWN and event.key == K_ESCAPE:
-				return
+				close()
 			else:
 				if event.type == MOUSEBUTTONDOWN and event.button in [1, 3]:
 					for window in objlists.clickoffwindows:

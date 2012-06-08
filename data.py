@@ -45,7 +45,10 @@ class database():
 			return self.reversedata[var]
 		except:
 			if default == None:
-				default = int(variable) + 1
+				try:
+					default = int(variable) + 1
+				except UnboundLocalError:
+					default = 0
 				self.set(default, var)
 			return default
 	
@@ -56,6 +59,8 @@ class database():
 				value = True
 			elif value == "False":
 				value = False
+			if ":" in value:
+				value = value.split(":")
 			return value
 		except:
 			return default
@@ -67,10 +72,12 @@ class database():
 		string = ""
 		for index, variable in enumerate(self.data):
 			value = self.data[variable]
-			if value == True:
+			if value == True and isinstance(value, (bool)):
 				value = "True"
-			elif value == False:
+			elif value == False and isinstance(value, (bool)):
 				value = "False"
+			if isinstance(value, (list)):
+				value = ":".join(value)
 			string += str(variable) + "=" +str(value) + "\n"
 		return string
 	

@@ -23,12 +23,16 @@ class testwindow(Window):
 		self.check = checkbox(self, "hello world")
 		self.pack(self.check)
 		
-		self.pict = picturebox(self, "test", "euohtasn.png", size=[50,50], clickevent=self.testbuttonclick)
-		self.pack(self.pict)
+		draw = drawer(self, "Test Title")
 
-		self.pack(label(self, "hi"))
-		self.pack(label(self, "hi"))
-		self.pack(label(self, "hi"))
+		draw.pack(label(self, "hi"))
+		draw.pack(label(self, "hi"))
+		draw.pack(label(self, "hi"))
+		self.pict = picturebox(self, "test", "euohtasn.png", size=[50,50], clickevent=self.testbuttonclick)
+		draw.pack(self.pict)
+		
+		self.pack(draw)
+		
 		self.pack(label(self, "hi"))
 		self.pack(label(self, "hi"))
 		self.pack(label(self, "hi"))
