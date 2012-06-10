@@ -1,1 +1,1 @@
-{"entities": null, "tiles": ["blank", "dust", "grass"]}
+{"entities": ["monster", "monster 2"], "tiles": ["blank", "grass", "dust"]}

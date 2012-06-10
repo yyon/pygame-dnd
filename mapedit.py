@@ -122,7 +122,16 @@ class tiles(Window):
 		objlists.dungeonmap.changeeditmode("tile")
 	
 	def addtile(self):
-		inputbox("Tile Name", "Enter Tile Name", self.edittile)
+		inputbox("Tile Name", "Enter Tile Name", self.finishaddtile)
+	
+	def finishaddtile(self, name):
+		namedatabase = data.database("", "names")
+		tilenames = namedatabase.get("tiles", [])
+		tilenames.append(name)
+		namedatabase.set("tiles", tilenames)
+		namedatabase.write()
+				
+		self.edittile(name)
 	
 	def startcopytile(self, tile):
 		inputbox("Tile Name", "Enter new tile name", functools.partial(self.finishcopytile, tile))
@@ -130,6 +139,13 @@ class tiles(Window):
 	def finishcopytile(self, oldtile, newtile):
 		shutil.copy(resources.fullname(dungeonmap.tileimgfolder, oldtile+".png"), resources.fullname(dungeonmap.tileimgfolder, newtile+".png"))
 		shutil.copy(data.fullname(dungeonmap.tilefolder, oldtile), data.fullname(dungeonmap.tilefolder, newtile))
+
+		namedatabase = data.database("", "names")
+		tilenames = namedatabase.get("tiles", [])
+		tilenames.append(newtile)
+		namedatabase.set("tiles", tilenames)
+		namedatabase.write()
+		
 		self.refreshlist()
 		
 	def rename(self, tile):
@@ -139,6 +155,12 @@ class tiles(Window):
 		shutil.move(resources.fullname(dungeonmap.tileimgfolder, oldname+".png"), resources.fullname(dungeonmap.tileimgfolder, newname+".png"))
 		shutil.move(data.fullname(dungeonmap.tilefolder, oldname), data.fullname(dungeonmap.tilefolder, newname))
 		objlists.dungeonmap.renametile(oldname, newname)
+
+		namedatabase = data.database("", "names")
+		tilenames = namedatabase.get("tiles", [])
+		tilenames[tilenames.index(oldname)] = newname
+		namedatabase.set("tiles", tilenames)
+		namedatabase.write()
 		
 		self.refreshlist()
 	
@@ -147,6 +169,13 @@ class tiles(Window):
 		os.remove(data.fullname(dungeonmap.tilefolder, tile))
 		if objlists.dungeonmap.selectedtile == tile:
 			objlists.dungeonmap.selectedtile = None
+		
+		namedatabase = data.database("", "names")
+		tilenames = namedatabase.get("tiles", [])
+		tilenames.remove(tile)
+		namedatabase.set("tiles", tilenames)
+		namedatabase.write()
+
 		self.refreshlist()
 	
 	def edittile(self, name):
@@ -212,9 +241,9 @@ class entitieswindow(Window):
 	def changetype(self, entity):
 		entityeditor.entitytypeselector(functools.partial(self.finishchangetype, entity))
 		
-	def finishchangetype(self, entity, type):
+	def finishchangetype(self, entity, entitytype):
 		database = data.database(dungeonmap.entityfolder, entity)
-		database.set("type", type)
+		database.set("type", entitytype)
 		database.write()
 	
 	def selectentity(self, entity):
@@ -226,8 +255,15 @@ class entitieswindow(Window):
 		
 	def finishaddentity(self, name):
 		os.makedirs(resources.fullname(dungeonmap.entityimgfolder, name))
-		data.get_data(dungeonmap.entityfolder, name)
+		
+		namedatabase = data.database("", "names")
+		entitynames = namedatabase.get("entities", [])
+		entitynames.append(name)
+		namedatabase.set("entities", entitynames)
+		namedatabase.write()
+
 		self.editentity(name)
+		
 		self.refreshlist()
 
 	def rename(self, tile):
@@ -239,6 +275,12 @@ class entitieswindow(Window):
 		shutil.move(data.fullname(dungeonmap.entityfolder, oldentity), data.fullname(dungeonmap.entityfolder, newentity))
 		objlists.dungeonmap.renameentity(oldentity, newentity)
 		
+		namedatabase = data.database("", "names")
+		entitynames = namedatabase.get("entities", [])
+		entitynames[entitynames.index(oldentity)] = newentity
+		namedatabase.set("entities", entitynames)
+		namedatabase.write()
+		
 		self.refreshlist()
 	
 	def startcopyentity(self, tile):
@@ -247,6 +289,13 @@ class entitieswindow(Window):
 	def finishcopyentity(self, oldentity, newentity):
 		shutil.copytree(resources.fullname(dungeonmap.entityimgfolder, oldentity), resources.fullname(dungeonmap.entityimgfolder, newentity))
 		shutil.copy(data.fullname(dungeonmap.entityfolder, oldentity), data.fullname(dungeonmap.entityfolder, newentity))
+		
+		namedatabase = data.database("", "names")
+		entitynames = namedatabase.get("entities", [])
+		entitynames.append(newentity)
+		namedatabase.set("entities", entitynames)
+		namedatabase.write()
+		
 		self.refreshlist()
 	
 	def deleteentity(self, entity):
@@ -254,6 +303,13 @@ class entitieswindow(Window):
 		os.remove(data.fullname(dungeonmap.entityfolder, entity))
 		if objlists.dungeonmap.selectedentity == entity:
 			objlists.dungeonmap.selectedentity = None
+
+		namedatabase = data.database("", "names")
+		entitynames = namedatabase.get("entities", [])
+		entitynames.remove(entity)
+		namedatabase.set("entities", entitynames)
+		namedatabase.write()
+		
 		self.refreshlist()
 	
 	def editentity(self, name):

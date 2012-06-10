@@ -14,7 +14,6 @@ def get_data(folder, filename):
 def set_data(data, folder, filename):
 	filename = os.path.join(datafolder, folder, filename)
 	f = open(filename, "w")
-	print "writing:", data
 	f.write(data)
 	f.close()
 	
@@ -29,10 +28,8 @@ class database():
 	
 	def load(self):
 		self.text = get_data(self.folder, self.filename)
-		print "read:", self.text
 		if self.text != "":
 			self.data = json.loads(self.text)
-			print "interpreted as", self.data
 		else:
 			self.data = {}
 	

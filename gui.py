@@ -139,10 +139,7 @@ class picturebox(clickRect, control):
 
 		self.makesprite()
 		
-		if self.sprite:
-			clickRect.__init__(self, window.area, 0, 0, self.sprite.rect.width, self.sprite.rect.height, 1, self.click)
-		else:
-			clickRect.__init__(self, window.area, 0, 0, size[0], size[1], 1, self.click)
+		clickRect.__init__(self, window.area, 0, 0, self.sprite.rect.width, self.sprite.rect.height, 1, self.click)
 	
 	def click(self, event, position, dragpos=None):
 		if is_click(event):
@@ -153,33 +150,27 @@ class picturebox(clickRect, control):
 
 	def makesprite(self):
 		fullname = resources.fullname(self.imagefolder, self.imagename)
-		if os.path.exists(fullname):
-			self.sprite = sprite(self.window, self.imagefolder, self.imagename, size=self.size)
-			self.sprite.move(self.topleft)
-			self.width = self.sprite.rect.width
-			self.height = self.sprite.rect.height
-#			self.toggleicons()
-		else:
-			self.sprite = None
+		if not os.path.exists(fullname):
+			os.system("convert -define png:color-type=6 -size " + str(self.size[0]) + "x" + str(self.size[1]) + " xc:transparent " + str(fullname))
+		self.sprite = sprite(self.window, self.imagefolder, self.imagename, size=self.size)
+		self.sprite.move(self.topleft)
+		self.width = self.sprite.rect.width
+		self.height = self.sprite.rect.height
 	
 	def gimpedit(self):
 		fullname = resources.fullname(self.imagefolder, self.imagename)
-		if not os.path.exists(fullname):
-			os.system("convert -define png:color-type=6 -size " + str(self.size[0]) + "x" + str(self.size[1]) + " xc:transparent " + str(fullname))
 		subprocess.Popen(shlex.split("gimp \""+str(fullname)+"\""))
-		
+	
 	def refresh(self):
 		self.makesprite()
 	
 	def draw(self, screen):
 		pygame.draw.rect(screen, pygame.color.Color("black"), self, 1)
-		if self.sprite:
-			self.sprite.draw(screen)
+		self.sprite.draw(screen)
 	
 	def move(self, pos):
 		rect.move(self, pos)
-		if self.sprite:
-			self.sprite.move(pos)
+		self.sprite.move(pos)
 
 #a checkbox control
 class checkbox(rect, control):
