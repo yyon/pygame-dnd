@@ -12,8 +12,6 @@ tilefolder = "tiles"
 tileimgfolder = "tile"
 
 mapfolder = "maps"
-mappropertiesfolder = "map properties"
-mapentityfolder = "map entities"
 
 actualentitysize = [50, 50]
 entitysize = [50, 50]
@@ -240,58 +238,72 @@ class Map(pygame.Surface):
 		
 	def openmap(self, name):
 		self.mapname = name
-		
-		mapdata = data.get_data(mapfolder, self.mapname)
-		mapproperties = data.database(mappropertiesfolder, self.mapname)
-		
-		self.mapwidth = int(mapproperties.get("width", self.mapwidth))
-		self.mapheight = int(mapproperties.get("height", self.mapheight))
+
+		mapdatabase = data.database(mapfolder, self.mapname)
+
+		self.mapwidth = int(mapdatabase.get("width", self.mapwidth))
+		self.mapheight = int(mapdatabase.get("height", self.mapheight))
 		
 		self.newmap()
 		
-		tilenamedatabase = data.database("", "tilenames")
+		mapdata = mapdatabase.get("map", [[0]*self.mapwidth]*self.mapheight)#data.get_data(mapfolder, self.mapname)
+		
+		namedatabase = data.database("", "names")
+		tilenames = namedatabase.get("tiles", [])
 		
 		if mapdata != "":
-			for y, line in enumerate(mapdata.split("\n")):
-				for x, tile in enumerate(line.split(":")):
-					tile = tilenamedatabase.get(tile, "blank")
+			for y, line in enumerate(mapdata):
+				for x, tile in enumerate(line):
+					tile = tilenames[int(tile)]
 					self.map[y][x] = self.tilesprite(tile)
-
-		entitynamedatabase = data.database("", "entitynames")
-					
-		entitystring = data.get_data(mapentityfolder, self.mapname)
-		for line in entitystring.split("\n"):
-			if line != "":
-				self.entities.append([entitynamedatabase.get(line.split(":")[1], None), [int(line.split(":")[0].split(",")[0]), int(line.split(":")[0].split(",")[1])]])
+		
+		entitynames = namedatabase.get("entities", [])
+		
+		mapentities = mapdatabase.get("entities", [])
+		
+		for entity in mapentities:
+			self.entities.append([entitynames[int(entity[0])], entity[1]])
 	
 	def savemap(self):
 		if self.mapname != None:
-			tilenamedatabase = data.database("", "tilenames")
-
+			mapdatabase = data.database(mapfolder, self.mapname)
+			
+			namedatabase = data.database("", "names")
+			
+			tilenames = namedatabase.get("tiles", [])
+			
 			strmap = copy.deepcopy(self.map)
-			strmap = [[str(tilenamedatabase.reverseget(tile, None)) for tile in column] for column in strmap]
-			strmap = [":".join(column) for column in strmap]
-			strmap = "\n".join(strmap)
 			
-			tilenamedatabase.write()
+			for y, row in enumerate(strmap):
+				for x, tile in enumerate(row):
+					if not tile in tilenames:
+						tilenames.append(tile)
+					strmap[y][x] = str(tilenames.index(tile))
 			
-			data.set_data(strmap, mapfolder, self.mapname)
-			mapproperties = data.database(mappropertiesfolder, self.mapname)
+			entitynames = namedatabase.get("entities")
 			
-			mapproperties.set("width", self.mapwidth)
-			mapproperties.set("height", self.mapheight)
+			entitylist = copy.deepcopy(self.entities)
 			
-			mapproperties.write()
+			if entitylist == None:
+				entitylist = []
 			
-			entitystring = ""
+			for entity in entitylist:
+				if not entity[0] in entitynames:
+					entitynames.append(entity[0])
+				entity[0] = entitynames.index(entity[0])
 
-			entitynamedatabase = data.database("", "entitynames")
+			mapdatabase.set("map", strmap)
 			
-			for entity in self.entities:
-				entitystring += str(entity[1][0]) + "," + str(entity[1][1]) + ":" + str(entitynamedatabase.reverseget(str(entity[0]), None)) + "\n"
-			entitynamedatabase.write()
-				
-			data.set_data(entitystring, mapentityfolder, self.mapname)
+			mapdatabase.set("entities", entitylist)
+			
+			mapdatabase.set("width", self.mapwidth)
+			mapdatabase.set("height", self.mapheight)
+			
+			namedatabase.set("tiles", tilenames)
+			namedatabase.set("entities", entitynames)
+			
+			namedatabase.write()
+			mapdatabase.write()
 
 class mapwindow(Window):
 	def __init__(self):

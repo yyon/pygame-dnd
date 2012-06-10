@@ -1,4 +1,5 @@
 import os
+import json
 
 datafolder = "data"
 
@@ -13,6 +14,7 @@ def get_data(folder, filename):
 def set_data(data, folder, filename):
 	filename = os.path.join(datafolder, folder, filename)
 	f = open(filename, "w")
+	print "writing:", data
 	f.write(data)
 	f.close()
 	
@@ -27,14 +29,12 @@ class database():
 	
 	def load(self):
 		self.text = get_data(self.folder, self.filename)
-		self.lines = self.text.split("\n")
-		self.data = {}
-		for line in self.lines:
-			if line != "":
-				dataline = line.split("=")
-				variable = dataline[0]
-				value = dataline[1]
-				self.data[variable] = value
+		print "read:", self.text
+		if self.text != "":
+			self.data = json.loads(self.text)
+			print "interpreted as", self.data
+		else:
+			self.data = {}
 	
 	def reverseget(self, var, default=None):
 		self.reversedata = {}
@@ -55,12 +55,6 @@ class database():
 	def get(self, variable, default=None):
 		try:
 			value = self.data[variable]
-			if value == "True":
-				value = True
-			elif value == "False":
-				value = False
-			if ":" in value:
-				value = value.split(":")
 			return value
 		except:
 			return default
@@ -69,17 +63,7 @@ class database():
 		self.data[variable] = value
 	
 	def tostring(self):
-		string = ""
-		for index, variable in enumerate(self.data):
-			value = self.data[variable]
-			if value == True and isinstance(value, (bool)):
-				value = "True"
-			elif value == False and isinstance(value, (bool)):
-				value = "False"
-			if isinstance(value, (list)):
-				value = ":".join(value)
-			string += str(variable) + "=" +str(value) + "\n"
-		return string
+		return json.dumps(self.data)
 	
 	def write(self):
 		set_data(self.tostring(), self.folder, self.filename)

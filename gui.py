@@ -25,10 +25,14 @@ def is_click(event):
 #a simple rectangle with a move function
 class rect(pygame.Rect):
 	def __init__(self, left, top=None, width=None, height=None):
+		self.visible = True
 		if top == None:
 			pygame.Rect.__init__(self, left)
 		else:
 			pygame.Rect.__init__(self, left, top, width, height)
+			
+	def setvisible(self, visible):
+		self.visible = visible
 	
 	#move rectangle to a new position
 	def move(self, pos):
@@ -107,6 +111,8 @@ class control():
 		self.editable = True
 		self.window = window
 		self.visible = True
+	def setvisible(self, visible):
+		self.visible = visible
 	def select(self):
 		pass
 	def deselect(self):
@@ -471,9 +477,10 @@ class eventhandler():
 				layer = self.clickareas[layernum]
 				for rectnum in range(len(layer)-1, -1, -1):
 					rect = layer[rectnum]
-					if rect.collidepoint(position):
-						rect.clickrectevent(event, position)
-						foundrect = True
+					if rect.visible:
+						if rect.collidepoint(position):
+							rect.clickrectevent(event, position)
+							foundrect = True
 					if foundrect:
 						break
 				if foundrect:
@@ -587,6 +594,7 @@ class grid():
 		self.packlist = []
 		self.packbuffer = 4
 		self.packoffset = packoffset
+		self.visible = True
 	
 	def repack(self):
 		for y, layer in enumerate(self.packlist):
@@ -616,16 +624,22 @@ class grid():
 			self.packlist[len(self.packlist)-1].append(rect)
 		elif direction == "right":
 			self.packlist[len(self.packlist)-1].append(rect)
-
+		
+		rect.setvisible(self.visible)
+		
 		self.repack()
 	
 	def unpack(self, rect=None):
 		if rect == None:
+			for layer in self.packlist:
+				for rect in layer:
+					rect.setvisible(False)
 			self.packlist = []
 		else:
 			for index, column in enumerate(self.packlist): #@UnusedVariable
 				try:
 					self.packlist[index].remove(rect)
+					rect.setvisible(False)
 					break
 				except:
 					pass
@@ -668,6 +682,13 @@ class controlgroup(rect, grid, control):
 		control.__init__(self, window)
 		self.window = window
 		grid.__init__(self)
+		
+	def setvisible(self, visible):
+		control.setvisible(self, visible)
+		
+		for layer in self.packlist:
+			for rect in layer:
+				rect.setvisible(visible)
 		
 	def pack(self, rect, direction = "down"):
 		grid.pack(self, rect, direction)
@@ -749,6 +770,8 @@ class drawer(controlgroup):
 		
 	def pack(self, rect, direction="down"):
 		self.items.pack(rect, direction)
+		if self.itemsvisible == False:
+			rect.setvisible(False)
 		self.refresh()
 
 class listbox(controlgroup):
@@ -764,11 +787,11 @@ class listbox(controlgroup):
 	def refreshitems(self):
 		self.unpack()
 		
-		addbutton = picturebox(self.window, "gui", "plus.png", clickevent=self.startadditem, size=[10,10])
-		self.pack(addbutton)
+		self.addbutton = picturebox(self.window, "gui", "plus.png", clickevent=self.startadditem, size=[10,10])
+		self.pack(self.addbutton)
 		
-		titlelabel = label(self.window, self.title)
-		self.pack(titlelabel, "right")
+		self.titlelabel = label(self.window, self.title)
+		self.pack(self.titlelabel, "right")
 		
 		for item in list(self.items):
 			removebutton = picturebox(self.window, "gui", "minus.png", clickevent=functools.partial(self.removeitem, item), size=[10,10])
@@ -776,9 +799,12 @@ class listbox(controlgroup):
 			
 			itemlabel = label(self.window, item, functools.partial(self.click, item))
 			self.pack(itemlabel, "right")
-			
+		
 		self.recalcsize()
 		self.repack()
+	
+	def setvisible(self, visible):
+		controlgroup.setvisible(self, visible)
 	
 	def repack(self):
 		self.packoffset = [self.left, self.top]
@@ -980,6 +1006,14 @@ class Window(pygame.Rect, grid, eventhandler):
 		else:
 			self.repack()
 		
+		if self.has_scrollbar:
+			self.resizescrollbar()
+			
+	def repack(self):
+		grid.repack(self)
+		
+		self.area.resize([self.getareawidth(), self.getareaheight()])
+
 		if self.has_scrollbar:
 			self.resizescrollbar()
 			

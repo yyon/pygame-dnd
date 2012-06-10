@@ -227,8 +227,8 @@ class entitieswindow(Window):
 	def finishaddentity(self, name):
 		os.makedirs(resources.fullname(dungeonmap.entityimgfolder, name))
 		data.get_data(dungeonmap.entityfolder, name)
+		self.editentity(name)
 		self.refreshlist()
-#		self.editentity(self, name)
 
 	def rename(self, tile):
 		inputbox("Entity Name", "Enter new entity name", functools.partial(self.newname, tile))
@@ -338,14 +338,14 @@ class mapselector(Window):
 	
 	def finishcopymap(self, oldmap, newmap):
 		shutil.copy(data.fullname(dungeonmap.mapfolder, oldmap), data.fullname(dungeonmap.mapfolder, newmap))
-		shutil.copy(data.fullname(dungeonmap.mappropertiesfolder, oldmap), data.fullname(dungeonmap.mappropertiesfolder, newmap))
-		shutil.copy(data.fullname(dungeonmap.mapentityfolder, oldmap), data.fullname(dungeonmap.mapentityfolder, newmap))
+#		shutil.copy(data.fullname(dungeonmap.mappropertiesfolder, oldmap), data.fullname(dungeonmap.mappropertiesfolder, newmap))
+#		shutil.copy(data.fullname(dungeonmap.mapentityfolder, oldmap), data.fullname(dungeonmap.mapentityfolder, newmap))
 		self.refreshlist()
 	
 	def deletemap(self, mapname):
 		os.remove(data.fullname(dungeonmap.mapfolder, mapname))
-		os.remove(data.fullname(dungeonmap.mappropertiesfolder, mapname))
-		os.remove(data.fullname(dungeonmap.mapentityfolder, mapname))
+#		os.remove(data.fullname(dungeonmap.mappropertiesfolder, mapname))
+#		os.remove(data.fullname(dungeonmap.mapentityfolder, mapname))
 		self.refreshlist()
 		
 	def editmap(self, name):
