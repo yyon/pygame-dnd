@@ -1,9 +1,12 @@
-import pygame #@UnusedImport
 from pygame.locals import * #@UnusedWildImport
 from gui import * #@UnusedWildImport
 import numpy
 import data
 import copy
+import entity
+
+entitytypes = ["npc"]
+entityclasses = {"npc":entity.npc}
 
 actualtilesize = [50, 50]
 tilesize = [50, 50]
@@ -60,6 +63,9 @@ class Map(pygame.Surface):
 		self.refreshtiles()
 		self.refreshentities()
 		
+		self.selection = None
+		self.selectionimage, rect = resources.load_image("gui", "selection.png")
+		
 	def changeeditmode(self, newmode):
 		self.editmode = newmode
 		if newmode == "tile":
@@ -80,7 +86,7 @@ class Map(pygame.Surface):
 			self.mapheight += 1
 			self.map.insert(0, [self.blanktile()]*self.mapwidth)
 			for index in range(len(self.entities)):
-				self.entities[index][1][1] += 1
+				self.entities[index].pos[1] += 1
 		elif direction == "down":
 			self.mapheight += 1
 			self.map.append([self.blanktile()]*self.mapwidth)
@@ -89,7 +95,7 @@ class Map(pygame.Surface):
 			for y in range(len(self.map)):
 				self.map[y].insert(0, self.blanktile())
 			for index in range(len(self.entities)):
-				self.entities[index][1][0] += 1
+				self.entities[index].pos[0] += 1
 		elif direction == "right":
 			self.mapwidth += 1
 			for y in range(len(self.map)):
@@ -101,7 +107,7 @@ class Map(pygame.Surface):
 				self.mapheight -= 1
 				self.map.pop(0)
 			for index, entity in enumerate(self.entities):
-				self.entities[index][1][1] -= 1
+				self.entities[index].pos[1] -= 1
 		elif direction == "down":
 			if self.mapheight != 1:
 				self.mapheight -= 1
@@ -112,7 +118,7 @@ class Map(pygame.Surface):
 				for y in range(len(self.map)):
 					self.map[y].pop(0)
 			for index, entity in enumerate(self.entities):
-				self.entities[index][1][0] -= 1
+				self.entities[index].pos[0] -= 1
 		elif direction == "right":
 			if self.mapwidth != 1:
 				self.mapwidth -= 1
@@ -122,7 +128,7 @@ class Map(pygame.Surface):
 		entitiestoremove = []
 		
 		for index, entity in enumerate(self.entities):
-			if not self.inbounds(self.entities[index][1]):
+			if not self.inbounds(entity.pos):
 				entitiestoremove.append(entity)
 		
 		for entity in entitiestoremove:
@@ -157,6 +163,13 @@ class Map(pygame.Surface):
 								self.addentity(self.selectedentity, tilecoords)
 							else:
 								self.removeentityatposition(tilecoords)
+		if event.type == MOUSEBUTTONUP and event.button == 1:
+			if self.inbounds(tilecoords):
+				entities = self.getentities(tilecoords)
+				if len(entities) == 1:
+					self.selection = entities[0]
+				elif len(entities) != 0:
+					self.selection = entities[0]
 	
 	def inbounds(self, tilecoords):
 		return ( tilecoords[0] >= 0 and tilecoords[1] >= 0 and tilecoords[0] < len(self.map[0]) and tilecoords[1] < len(self.map) )
@@ -164,9 +177,13 @@ class Map(pygame.Surface):
 	def rightclick(self, position):
 		menuitems = []
 		
-		if self.getentities(position) != []:
-			if self.mode == "edit":
-				menuitems.append(["remove", functools.partial(self.removeentityatposition, position)])
+		for entity in self.getentities(position):
+			for item in entity.getrightclickitems():
+				menuitems.append(item)
+		
+		if self.selection != None:
+			for item in self.selection.getselectedrightclickitems(position):
+				menuitems.append(item)
 		
 		menu(menuitems)
 	
@@ -182,19 +199,23 @@ class Map(pygame.Surface):
 	def getentities(self, pos):
 		entities = []
 		for otherentity in self.entities:
-			if otherentity[1] == pos:
+			if otherentity.pos == pos:
 				entities.append(otherentity)
 		return entities
 		
 	def addentity(self, entity, pos):
 		if self.getentities(pos) == []:
-			self.entities.append([entity, pos])
+			entitydatabase = data.database(entityfolder, entity)
+			entitytype = entitydatabase.get("type", entitytypes[0])
+			entityclass = entityclasses[entitytype]
+			
+			self.entities.append(entityclass(self, entity, pos))
 		
 	def removeentityatposition(self, pos):
 		entitiestoremove = []
 		
 		for entity in self.entities:
-			if entity[1] == pos:
+			if entity.pos == pos:
 				entitiestoremove.append(entity)
 		
 		for entity in entitiestoremove:
@@ -205,8 +226,8 @@ class Map(pygame.Surface):
 			
 	def renameentity(self, originalname, newname):
 		for index, entity in self.entities:
-			if entity[0] == originalname:
-				self.entities[index][0] = newname
+			if entity.name == originalname:
+				self.entities[index].name = newname
 		
 	def renametile(self, originalname, newname):
 		for y in range(self.mapheight):
@@ -229,7 +250,10 @@ class Map(pygame.Surface):
 	
 	def update(self):
 		self.width, self.height = self.area.rect.width, self.area.rect.height
-		
+	
+	def coordstopos(self, coords):
+		return [coords[0]*tilesize[0] + self.topleft[0], coords[1]*tilesize[1] + self.topleft[1]]
+	
 	def draw(self, screen):
 		self.blit(self.background, [0,0])
 		gridy = range(max((0 - tilesize[1] - self.topleft[1])/tilesize[1]+1, 0), min((self.height - self.topleft[1])/tilesize[1]+1, self.mapheight))
@@ -244,9 +268,12 @@ class Map(pygame.Surface):
 				if self.mode == "edit" and self.showgrid == True:
 					pygame.draw.rect(self, pygame.color.Color("white"), rect(posx, posy, tilesize[0], tilesize[1]), 1)
 		for entity in self.entities:
-			pos = [entity[1][0]*tilesize[0] + self.topleft[0], entity[1][1]*tilesize[1] + self.topleft[1]]
+			pos = self.coordstopos(entity.pos)
 			if self.mode == "edit":
-				self.blit(self.entityicons[entity[0]], pos)
+				self.blit(self.entityicons[entity.name], pos)
+		if self.selection != None:
+			pos = self.coordstopos(self.selection.pos)
+			self.blit(self.selectionimage, pos)
 		
 		screen.blit(self, [0,0])
 		
@@ -269,7 +296,7 @@ class Map(pygame.Surface):
 			for y, line in enumerate(mapdata):
 				for x, tile in enumerate(line):
 					try:
-						tile = tilenames[int(tile)]
+						tile = tilenames[tile]
 					except:
 						tile = tilenames[0]
 					self.map[y][x] = self.tilesprite(tile)
@@ -285,7 +312,7 @@ class Map(pygame.Surface):
 			except:
 				entityname = None
 			if entityname != None:
-				self.entities.append([entityname, entityposition])
+				self.addentity(entityname, entityposition)
 		
 		namedatabase.write()
 	
@@ -304,13 +331,13 @@ class Map(pygame.Surface):
 					if not tile in tilenames:
 						tilenames.append(tile)
 						print "WARNING: tile did not exist"
-					strmap[y][x] = str(tilenames.index(tile))
+					strmap[y][x] = tilenames.index(tile)
 			
 			entitynames = namedatabase.get("entities")
 			if entitynames == None:
 				entitynames = []
 			
-			entitylist = copy.deepcopy(self.entities)
+			entitylist = [[entity.name, entity.pos] for entity in self.entities]
 			
 			if entitylist == None:
 				entitylist = []

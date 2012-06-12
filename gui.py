@@ -111,6 +111,7 @@ class control():
 		self.editable = True
 		self.window = window
 		self.visible = True
+		self.container = False
 	def setvisible(self, visible):
 		self.visible = visible
 	def select(self):
@@ -118,6 +119,8 @@ class control():
 	def deselect(self):
 		pass
 	def event(self, event, position):
+		pass
+	def gettablist(self):
 		pass
 
 #a picturebox control
@@ -480,7 +483,10 @@ class eventhandler():
 			self.tab()
 		else:
 			if len(self.windoweventhandler.gettablist()) != 0:
-				self.windoweventhandler.gettablist()[self.windoweventhandler.tabindex].event(event, position)
+				try:
+					self.windoweventhandler.gettablist()[self.windoweventhandler.tabindex].event(event, position)
+				except IndexError:
+					pass
 	
 	#update hovering and dragging
 	def update(self):
@@ -671,6 +677,7 @@ class controlgroup(rect, grid, control):
 	def __init__(self, window):
 		rect.__init__(self, 0, 0, 1, 1)
 		control.__init__(self, window)
+		self.container = True
 		self.window = window
 		grid.__init__(self)
 		
@@ -698,6 +705,20 @@ class controlgroup(rect, grid, control):
 		self.recalcsize()
 		grid.repack(self)
 		self.window.repack()
+
+	def gettablist(self):
+		if self.visible:
+			tablist = []
+			for row in self.packlist:
+				for item in row:
+					if item.tabbable and item.visible:
+						tablist.append(item)
+					elif item.container:
+						for newitem in item.gettablist():
+							tablist.append(newitem)
+			return tablist
+		else:
+			return []
 		
 	def move(self, pos):
 		for layer in self.packlist:
@@ -756,6 +777,12 @@ class drawer(controlgroup):
 		self.recalcsize()
 		self.repack()
 		
+#	def gettablist(self):
+#		if self.itemsvisible:
+#			control.gettablist(self)
+#		else:
+#			return []
+	
 	def packitems(self):
 		pass
 		
@@ -1060,8 +1087,14 @@ class Window(pygame.Rect, grid, eventhandler):
 		tablist = []
 		for row in self.packlist:
 			for item in row:
-				if item.tabbable:
+				if item.tabbable and item.visible:
 					tablist.append(item)
+				elif item.container:
+					try:
+						for newitem in item.gettablist():
+							tablist.append(newitem)
+					except:
+						pass
 		return tablist
 	
 	#update tab index
@@ -1329,6 +1362,7 @@ def close():
 	for window in objlists.windows:
 		window.close()
 	pygame.quit()
+	quit()
 
 def mainloop(mainwindow):
 	#Main Loop

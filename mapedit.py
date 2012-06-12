@@ -314,7 +314,7 @@ class entitieswindow(Window):
 	
 	def editentity(self, name):
 		database = data.database(dungeonmap.entityfolder, name)
-		entityeditor.editors[database.get("type", entityeditor.entitytypes[0])](name, self)
+		entityeditor.editors[database.get("type", dungeonmap.entitytypes[0])](name, self)
 	
 	def refreshlist(self):
 		self.unpack()

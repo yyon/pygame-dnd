@@ -3,8 +3,6 @@ import functools
 import data
 import dungeonmap
 
-entitytypes = ["npc"]
-
 skills = [["appraise", "int"], ["autohypnosis", "wis"], ["balance", "dex"], ["bluff", "cha"], ["climb", "str"], ["concentration", "con"], ["craft", "int"], ["decipher script", "int"], ["diplomacy", "cha"], ["disable device", "int"], ["disguise", "cha"], ["escape artist", "dex"], ["forgery", "int"], ["gather information", "cha"], ["handle animal", "cha"], ["heal", "wis"], ["hide", "dex"], ["intimidate", "cha"], ["jump", "str"], ["knowledge (arcana)", "int"], ["knowledge (arch/eng)", "int"], ["knowledge (dungeoneering)", "int"], ["knowledge (geography)", "int"], ["knowledge (history)", "int"], ["knowledge (local)", "int"], ["knowledge (nature)", "int"], ["knowledge (nobility)", "int"], ["knowledge (planes)", "int"], ["knowledge (psionics)", "int"], ["knowledge (religion)", "int"], ["listen", "wis"], ["move silently", "dex"], ["open lock", "dex"], ["perform (act)", "cha"], ["perform (comedy)", "cha"], ["perform (dance)", "cha"], ["perform (keyboard)", "cha"], ["perform (oratory)", "cha"], ["perform (percussion)", "cha"], ["perform (string instrument)", "cha"], ["perform (wing instrument)", "cha"], ["perform (sing)", "cha"], ["profession", "wis"], ["psicraft", "int"], ["ride", "dex"], ["search", "int"], ["sense motive", "wis"], ["sleight of hand", "dex"], ["spellcraft", "int"], ["spot", "wis"], ["survival", "wis"], ["swim", "str"], ["tumble", "dex"], ["use magic device", "cha"], ["use psionic device", "cha"], ["use rope", "dex"]]
 
 class entitytypeselector(Window):
@@ -16,7 +14,7 @@ class entitytypeselector(Window):
 		self.refreshentities()
 		
 	def refreshentities(self):
-		for entitytype in entitytypes:
+		for entitytype in dungeonmap.entitytypes:
 			b = button(self, entitytype, functools.partial(self.selectentitytype, entitytype))
 			self.pack(b)
 			
@@ -561,7 +559,7 @@ class npceditor(editor):
 		l = label(self, "type")
 		l.width = 100
 		self.armordrawer.pack(l, "right")
-				
+		
 		l = label(self, "max dex")
 		l.width = 50
 		self.armordrawer.pack(l, "right")
