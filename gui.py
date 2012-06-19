@@ -1357,7 +1357,11 @@ class menu(Window):
 		
 	def clickoff(self):
 		self.close()
-		
+
+def cleanup():
+	for socket in objlists.sockets:
+		socket.close()	
+
 def close():
 	for window in objlists.windows:
 		window.close()
@@ -1365,44 +1369,47 @@ def close():
 	quit()
 
 def mainloop(mainwindow):
-	#Main Loop
-	while True:
-		objlists.clock.tick(60)
-		
-		#Handle Input Events
-		for event in pygame.event.get():
-			position = pygame.mouse.get_pos()
-			if event.type == QUIT:
-				close()
-			elif event.type == KEYDOWN and event.key == K_ESCAPE:
-				close()
-			else:
-				if event.type == MOUSEBUTTONDOWN and event.button in [1, 3]:
-					for window in objlists.clickoffwindows:
-						if not window.boundaries.collidepoint(position):
-							window.clickoff()
-				
-				#find window, send event to window
-				for windowindex in range(0, len(objlists.windows)):
-					window = objlists.windows[windowindex]
-					if window.boundaries.collidepoint(position):
-						if event.type in [MOUSEBUTTONDOWN] and event.button == 1:
-							#focus window
-							focus(window)
-						#event
-						window.event(event, position)
-						break
-
-		objlists.allsprites.update()
-		for window in objlists.windows:
-			window.update()
-		
-		#Draw Everything
-		objlists.screen.blit(objlists.background, (0, 0))
-		objlists.allsprites.draw(objlists.screen)
-		for windowindex in range(len(objlists.windows)-1, -1, -1):
-			window = objlists.windows[windowindex]
-			window.draw(objlists.screen)
-		if len(objlists.windows) == 0:
-			mainwindow()
-		pygame.display.flip()
+	try:
+		#Main Loop
+		while True:
+			objlists.clock.tick(60)
+			
+			#Handle Input Events
+			for event in pygame.event.get():
+				position = pygame.mouse.get_pos()
+				if event.type == QUIT:
+					close()
+				elif event.type == KEYDOWN and event.key == K_ESCAPE:
+					close()
+				else:
+					if event.type == MOUSEBUTTONDOWN and event.button in [1, 3]:
+						for window in objlists.clickoffwindows:
+							if not window.boundaries.collidepoint(position):
+								window.clickoff()
+					
+					#find window, send event to window
+					for windowindex in range(0, len(objlists.windows)):
+						window = objlists.windows[windowindex]
+						if window.boundaries.collidepoint(position):
+							if event.type in [MOUSEBUTTONDOWN] and event.button == 1:
+								#focus window
+								focus(window)
+							#event
+							window.event(event, position)
+							break
+	
+			objlists.allsprites.update()
+			for window in objlists.windows:
+				window.update()
+			
+			#Draw Everything
+			objlists.screen.blit(objlists.background, (0, 0))
+			objlists.allsprites.draw(objlists.screen)
+			for windowindex in range(len(objlists.windows)-1, -1, -1):
+				window = objlists.windows[windowindex]
+				window.draw(objlists.screen)
+			if len(objlists.windows) == 0:
+				mainwindow()
+			pygame.display.flip()
+	finally:
+		cleanup()

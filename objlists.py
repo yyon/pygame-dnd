@@ -8,3 +8,4 @@ clock=None
 dungeonmap=None
 editorwindows = []
 clickoffwindows = []
+sockets = []

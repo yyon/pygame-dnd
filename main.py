@@ -16,11 +16,11 @@
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import pygame #@UnusedImport
 from gui import * #@UnusedWildImport
 import dungeonmap
 import mapedit
 import example
+import network
 
 #main window
 class mainwindow(Window):
@@ -30,11 +30,29 @@ class mainwindow(Window):
 		self.testbutton = button(self, "Show Test Window", self.testbuttonclick)
 		self.pack(self.testbutton)
 		
+		self.hostbutton = button(self, "Host", self.starthost)
+		self.pack(self.hostbutton)
+		
+		self.clientbutton = button(self, "Connect to Host", self.connecttohost)
+		self.pack(self.clientbutton)
+		
 		self.editmapbutton = button(self, "Maps", self.openmapclick)
 		self.pack(self.editmapbutton)
 		
 		self.closebutton = button(self, "Quit", self.stop)
 		self.pack(self.closebutton)
+		
+	def starthost(self):
+		host = network.Host()
+		print host.getsockname()
+		self.startclient(host.getsockname()[0])
+	
+	def connecttohost(self):
+		inputbox("Host IP", "Enter Host IP Address", self.startclient)
+	
+	def startclient(self, ip):
+		network.Client(ip)
+		network.loop()
 		
 	def stop(self):
 		pygame.quit()

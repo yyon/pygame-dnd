@@ -1,6 +1,9 @@
 import data
 import dungeonmap
 import functools
+import pygame
+import resources
+import os
 
 class entity():
 	def __init__(self, dungeon, name, pos):
@@ -8,13 +11,27 @@ class entity():
 		self.name = name
 		self.pos = pos
 		self.data = data.database(dungeonmap.entityfolder, self.name)
-	
+		self.selected = False
+		self.selectionimage, rect = resources.load_image("gui", "selection.png") #@UnusedVariable
+		self.refresh()
+		
+	def refresh(self):
+		self.icon, rect = resources.load_image(os.path.join(dungeonmap.entityimgfolder, self.name), "icon.png") #@UnusedVariable
+		self.icon = pygame.transform.scale(self.icon, (dungeonmap.entitysize[0], dungeonmap.entitysize[1]))
+		
 	def move(self, pos):
 		self.pos = pos
-	
+		
 	def remove(self):
 		self.dungeon.removeentity(self)
-	
+		
+	def draw(self, screen):
+		screenpos = self.dungeon.coordstopos(self.pos)
+		if self.dungeon.mode == "edit":
+			screen.blit(self.icon, screenpos)
+		if self.selected:
+			screen.blit(self.selectionimage, screenpos)
+			
 	def getrightclickitems(self):
 		items = []
 		

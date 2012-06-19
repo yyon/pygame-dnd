@@ -59,12 +59,10 @@ class Map(pygame.Surface):
 		self.selectedentity = None
 		
 		self.tiles = {}
-		self.entityicons = {}
 		self.refreshtiles()
 		self.refreshentities()
 		
 		self.selection = None
-		self.selectionimage, rect = resources.load_image("gui", "selection.png")
 		
 	def changeeditmode(self, newmode):
 		self.editmode = newmode
@@ -166,10 +164,17 @@ class Map(pygame.Surface):
 		if event.type == MOUSEBUTTONUP and event.button == 1:
 			if self.inbounds(tilecoords):
 				entities = self.getentities(tilecoords)
+				
+				if len(entities) != 0 and self.selection != None:
+					self.selection.selected = False
+				
 				if len(entities) == 1:
 					self.selection = entities[0]
 				elif len(entities) != 0:
 					self.selection = entities[0]
+				
+				if self.selection != None:
+					self.selection.selected = True
 	
 	def inbounds(self, tilecoords):
 		return ( tilecoords[0] >= 0 and tilecoords[1] >= 0 and tilecoords[0] < len(self.map[0]) and tilecoords[1] < len(self.map) )
@@ -244,10 +249,9 @@ class Map(pygame.Surface):
 			self.tiles[tilename] = pygame.transform.scale(self.tiles[tilename], (tilesize[0], tilesize[1]))
 	
 	def refreshentities(self):
-		for entity in os.listdir(os.path.join(data.datafolder, entityfolder)):
-			self.entityicons[entity], rect = resources.load_image(os.path.join(entityimgfolder, entity), "icon.png")
-			self.entityicons[entity] = pygame.transform.scale(self.entityicons[entity], (entitysize[0], entitysize[1]))
-	
+		for entity in self.entities:
+			entity.refresh()
+
 	def update(self):
 		self.width, self.height = self.area.rect.width, self.area.rect.height
 	
@@ -268,12 +272,7 @@ class Map(pygame.Surface):
 				if self.mode == "edit" and self.showgrid == True:
 					pygame.draw.rect(self, pygame.color.Color("white"), rect(posx, posy, tilesize[0], tilesize[1]), 1)
 		for entity in self.entities:
-			pos = self.coordstopos(entity.pos)
-			if self.mode == "edit":
-				self.blit(self.entityicons[entity.name], pos)
-		if self.selection != None:
-			pos = self.coordstopos(self.selection.pos)
-			self.blit(self.selectionimage, pos)
+			entity.draw(self)
 		
 		screen.blit(self, [0,0])
 		
